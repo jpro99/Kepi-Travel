@@ -22,6 +22,7 @@ export interface AirportTravelerCaptureProps {
   userLat?: number | null;
   userLon?: number | null;
   userAccuracyM?: number | null;
+  pendingOutboxCount?: number;
 }
 
 /**
@@ -38,6 +39,7 @@ export function AirportTravelerCapture({
   userLat,
   userLon,
   userAccuracyM,
+  pendingOutboxCount = 0,
 }: AirportTravelerCaptureProps) {
   const [open, setOpen] = useState(false);
   const [confirmedIata, setConfirmedIataState] = useState<string | null>(() => getConfirmedCaptureIata());
@@ -45,6 +47,8 @@ export function AirportTravelerCapture({
   const [gateString, setGateString] = useState("");
   const [note, setNote] = useState("");
   const [pinNote, setPinNote] = useState("");
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoTooLarge, setPhotoTooLarge] = useState(false);
   const [useGpsMark, setUseGpsMark] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +96,8 @@ export function AirportTravelerCapture({
     setGateString("");
     setNote("");
     setPinNote("");
+    setPhotoPreview(null);
+    setPhotoTooLarge(false);
     setUseGpsMark(true);
     setError(null);
     setSavedMessage(null);
@@ -142,6 +148,7 @@ export function AirportTravelerCapture({
         gateString,
         note,
         mapMark,
+        photoDataUrl: photoPreview,
       });
 
       setSavedMessage(
@@ -180,6 +187,14 @@ export function AirportTravelerCapture({
         aria-label="Capture gate or airport note"
       >
         Capture
+        {pendingOutboxCount > 0 ? (
+          <span
+            className="ml-2 inline-flex min-h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#0b1f3a] px-1.5 text-[12px] font-bold text-amber-200"
+            data-testid="traveler-capture-pending-count"
+          >
+            {pendingOutboxCount}
+          </span>
+        ) : null}
       </button>
 
       {open ? (
@@ -282,6 +297,47 @@ export function AirportTravelerCapture({
                     </label>
                   ) : null}
                 </div>
+
+                <label className="mt-4 block text-[14px] font-semibold">
+                  Photo (board / sign)
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="mt-2 block w-full text-[15px]"
+                    data-testid="traveler-capture-photo"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) {
+                        setPhotoPreview(null);
+                        setPhotoTooLarge(false);
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const dataUrl = typeof reader.result === "string" ? reader.result : null;
+                        if (!dataUrl) return;
+                        const bytes = Math.ceil((dataUrl.length * 3) / 4);
+                        if (bytes > 280_000) {
+                          setPhotoPreview(null);
+                          setPhotoTooLarge(true);
+                          return;
+                        }
+                        setPhotoTooLarge(false);
+                        setPhotoPreview(dataUrl);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  {photoPreview ? (
+                    <p className="mt-1 text-[13px] font-medium text-emerald-700">Photo attached locally.</p>
+                  ) : null}
+                  {photoTooLarge ? (
+                    <p className="mt-1 text-[13px] font-medium text-rose-600">
+                      Photo too large — use a smaller shot or add a note instead.
+                    </p>
+                  ) : null}
+                </label>
 
                 <label className="mt-4 block text-[14px] font-semibold">
                   Note (optional)

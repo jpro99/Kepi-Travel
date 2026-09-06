@@ -54,6 +54,15 @@ test("shouldShowTravelerCapture at airport or confirmed IATA", () => {
   assert.equal(shouldShowTravelerCapture({ locationStatus: "away" }), false);
 });
 
+test("validateTravelerCaptureInput accepts photo-only capture", () => {
+  const result = validateTravelerCaptureInput({
+    tripId: "trip-1",
+    iata: "FCO",
+    photoDataUrl: "data:image/jpeg;base64,abc",
+  });
+  assert.equal(result.ok, true);
+});
+
 test("resolveCaptureIata prefers geo when at-airport", () => {
   assert.equal(
     resolveCaptureIata({

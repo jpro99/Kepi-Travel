@@ -24,3 +24,15 @@ export function resolveSnapshotApplyOptions(input: {
     markHydrated: !input.tripsHydrated,
   };
 }
+
+/** iPhone-first: skip background work when tab is hidden or offline. */
+export function shouldRunForegroundSoftRefresh(now?: {
+  online?: boolean;
+  visibilityState?: DocumentVisibilityState;
+}): boolean {
+  const online = now?.online ?? (typeof navigator !== "undefined" ? navigator.onLine : true);
+  const visibility =
+    now?.visibilityState ??
+    (typeof document !== "undefined" ? document.visibilityState : "visible");
+  return online && visibility === "visible";
+}

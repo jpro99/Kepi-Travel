@@ -233,6 +233,15 @@ On a mid-stay calendar day, Home leads with the active booked stay (`resolveActi
 **G51 — Home stay day: city once, next travel day + tickets lead**  
 On a stay day with a future move, Home says the current city + hotel exactly once in the SET header. Primary beat is the next travel day (earliest booked train/flight/checkout) with real reservation title/route/time — never triple-repeat "You're in {city}" in WHAT'S NEXT / TODAY. `WHEN DO YOU LEAVE` uses checkout or train departure from booked facts, not "drive time not included." Train tickets CTA opens stored artifacts in Kepi first (in-app boarding pass → source-view PDF/email → explicit stored pass URL); external manage/Trenitalia only when no stored ticket artifact — never invented barcodes. Next flight stays below the move block.
 
+**G52 — Traveler capture outbox survives Help/Home offline**  
+Airport capture (gate STRING, map mark, photo, note, GPS+IATA) commits to IndexedDB first with idempotent op ids and `TRAVELER_OBSERVED` provenance only — never promoted to official Facts without resolver match. Foreground drain on `online` / `visibilitychange` (no Background Sync on iPhone); honest pending count on the Capture FAB.
+
+**G53 — Gate STRING path + calm day-of chrome**  
+Gate updates flow push → FIDS/boarding STRING → booked confirmation only; map DOT via `gateNodeResolver` longest-prefix — no match = no DOT. Home uses badge-only soft status; banner only for push cancel or gate-now. Background trip refresh skips hidden tabs and offline (Apple-calm soft refresh).
+
+**G54 — EC261 rights-notice coach cites official sources only**  
+Rights coach links EUR-Lex 261/2004, Your Europe, and the EU NEB list; July 2026 Parliament–Council reform language is date-stamped as not yet in force — never quote future reform euro amounts. Missed-flight ask → reason → checklist; Kepi does not auto-file claims.
+
 **Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`
 
 
@@ -260,7 +269,7 @@ Schedule-airborne windows may show **In the air** and the booked route (e.g. ONT
 **F17 — Stranded-at-airport + day-of door honesty (disruption belt)**  
 When booked departure has passed and coarse GPS still shows `at-airport` or `in-terminal` at that IATA (no airborne/live-enroute claim), Home must ask whether the traveler missed the flight or was denied boarding/rebooked — never assume they departed. EC 261 coach cites Regulation (EC) No 261/2004 on EUR-Lex only (Article 7 bands €250/€400/€600); Kepi coaches, does not file. Day-of doors use provenance `SCHEDULED_ITINERARY` | `AIRPORT_FIDS_TEXT` | `ALERT_PUSH_STRING` | `UNVERIFIED` — `UNVERIFIED` hides departure countdown; gate is STRING overlay only; bags/clubs from package Facts or honest unknown + official airport link. Rebook ingest clears stranded when the reservation departure moves forward.
 
-**Test:** `src/lib/travelAssistant/strandedFlightDetector.test.ts`, `src/lib/travelAssistant/ec261Coach.test.ts`, `src/lib/travelAssistant/dayOfDoorProvenance.test.ts`, `src/lib/travelAssistant/strandedRebookIngest.test.ts`
+**Test:** `src/lib/travelAssistant/strandedFlightDetector.test.ts`, `src/lib/travelAssistant/ec261Coach.test.ts`, `src/lib/travelAssistant/dayOfDoorProvenance.test.ts`, `src/lib/travelAssistant/strandedRebookIngest.test.ts`, `src/lib/travelAssistant/dayOfStatusChrome.test.ts`, `src/lib/travelAssistant/gateStringPath.test.ts`, `src/lib/airportNav/travelerCaptureOutbox.test.ts`
 
 **F18 — Provenance Charge Live Activity + Undying Rights Shell**  
 ActivityKit / Dynamic Island updates only when day-of provenance is green (`SCHEDULED_ITINERARY` | `AIRPORT_FIDS_TEXT` | `ALERT_PUSH_STRING`). `UNVERIFIED` and `TRAVELER_OBSERVED` must **never** drive Island countdown. Disruption EC261 rights walk ships as cached official primary-text coach (EUR-Lex + Your Europe; date-stamped 2026 amendment note; no invented € calculator). Native iOS uses `kepiLiveActivity` WK bridge; web shows honest fallback — no fake Island. On-device Vision/@Generable extract uses null discipline — missing gate stays missing.
@@ -1094,6 +1103,9 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G49 | `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts` |
 | G50 | `src/lib/travelAssistant/homeTodayCoach.test.ts`, `src/lib/travelAssistant/flightSort.test.ts` |
 | G51 | `src/lib/travelAssistant/homeTodayCoach.test.ts`, `src/lib/travelAssistant/trainTicketHandoff.test.ts` |
+| G52 | `src/lib/airportNav/travelerCaptureOutbox.test.ts`, `src/lib/airportNav/travelerCapture.test.ts` |
+| G53 | `src/lib/travelAssistant/gateStringPath.test.ts`, `src/lib/travelAssistant/dayOfStatusChrome.test.ts`, `src/lib/travelAssistant/softTripRefresh.test.ts` |
+| G54 | `src/lib/travelAssistant/ec261Coach.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

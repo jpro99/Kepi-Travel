@@ -43,6 +43,7 @@ export function validateTravelerCaptureInput(input: TravelerCaptureSubmitInput):
 
   const gateString = sanitizeTravelerGateString(input.gateString);
   const note = sanitizeTravelerNote(input.note);
+  const hasPhoto = Boolean((input.photoDataUrl ?? "").trim().startsWith("data:image/"));
   const mapMark =
     input.mapMark &&
     Number.isFinite(input.mapMark.lng) &&
@@ -55,10 +56,10 @@ export function validateTravelerCaptureInput(input: TravelerCaptureSubmitInput):
         }
       : null;
 
-  if (!gateString && !note && !mapMark) {
+  if (!gateString && !note && !mapMark && !hasPhoto) {
     return {
       ok: false,
-      error: "Add a gate you see, drop a map mark, or write a short note.",
+      error: "Add a gate you see, drop a map mark, photo, or short note.",
     };
   }
 
@@ -67,15 +68,23 @@ export function validateTravelerCaptureInput(input: TravelerCaptureSubmitInput):
 
 export function buildTravelerCaptureRecord(
   input: TravelerCaptureSubmitInput,
-  options?: { syncStatus?: TravelerCaptureRecord["syncStatus"] },
+  options?: {
+    syncStatus?: TravelerCaptureRecord["syncStatus"];
+    hasLocalPhoto?: boolean;
+  },
 ): TravelerCaptureRecord {
   const validated = validateTravelerCaptureInput(input);
   if (!validated.ok) {
     throw new Error(validated.error);
   }
 
+  const id = input.id?.trim() || generateId();
+  const hasLocalPhoto =
+    options?.hasLocalPhoto ??
+    Boolean((input.photoDataUrl ?? "").trim().startsWith("data:image/"));
+
   return {
-    id: generateId(),
+    id,
     provenance: TRAVELER_CAPTURE_PROVENANCE,
     tripId: input.tripId.trim(),
     reservationId: input.reservationId ?? null,
@@ -83,6 +92,7 @@ export function buildTravelerCaptureRecord(
     gateString: validated.gateString,
     mapMark: validated.mapMark,
     note: validated.note,
+    hasLocalPhoto,
     capturedAt: input.capturedAt?.trim() || new Date().toISOString(),
     syncStatus: options?.syncStatus ?? "pending",
     syncedAt: null,

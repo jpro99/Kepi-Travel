@@ -10,9 +10,22 @@ import type { StrandedDisruptionReason } from "@/lib/travelAssistant/strandedFli
 export const EC261_REGULATION_URL =
   "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32004R0261";
 
+/** European Commission — Your Europe passenger rights hub. */
+export const EC261_YOUR_EUROPE_URL =
+  "https://europa.eu/youreurope/citizens/travel/passenger-rights/air/index_en.htm";
+
 /** EU list of national enforcement bodies (European Commission). */
 export const EC261_ENFORCEMENT_BODIES_URL =
   "https://transport.ec.europa.eu/transport-themes/passenger-rights/complaint-handling-bodies_en";
+
+/**
+ * EU Parliament / Commission political agreement on air passenger rights reform —
+ * not yet in force as of 2026-09-06. Cite separately; do not replace Article 7 sums.
+ */
+export const EC261_REFORM_AGREEMENT_URL =
+  "https://www.europarl.europa.eu/news/en/press-room/20250711IPR28212/air-passenger-rights-meps-and-council-reach-deal-on-stronger-rights";
+
+export const EC261_REFORM_STATUS_AS_OF = "2026-09-06";
 
 export type Ec261DistanceBand = "short" | "medium" | "long" | "unknown";
 
@@ -58,6 +71,12 @@ export interface Ec261CoachStep {
   officialLabel?: string;
 }
 
+export interface Ec261ReformNotice {
+  statusAsOf: string;
+  summary: string;
+  officialUrl: string;
+}
+
 export interface Ec261CoachContent {
   eligible: boolean;
   headline: string;
@@ -65,7 +84,9 @@ export interface Ec261CoachContent {
   compensationBands: readonly Ec261CompensationBand[];
   careSummary: string;
   extraordinaryCircumstances: string;
+  reformNotice: Ec261ReformNotice | null;
   steps: Ec261CoachStep[];
+  checklist: readonly string[];
   disclaimer: string;
 }
 
@@ -80,6 +101,16 @@ function careSummaryForReason(reason: StrandedDisruptionReason): string {
     return "Under Article 6, for long delays the carrier must provide care (meals, refreshments, communication, and hotel when needed). Compensation under Article 7 may apply if arrival is delayed beyond thresholds in Article 7(1) — unless extraordinary circumstances apply (Article 5(3)).";
   }
   return "Rights depend on whether you were denied boarding, the flight was cancelled, or arrival was delayed beyond the thresholds in Article 7. Extraordinary circumstances (Article 5(3)) can limit compensation.";
+}
+
+export function buildEc261ReformNotice(nowIso = new Date().toISOString()): Ec261ReformNotice {
+  const asOf = nowIso.slice(0, 10);
+  return {
+    statusAsOf: asOf,
+    summary:
+      `As of ${asOf}, the July 2026 European Parliament–Council political agreement on stronger air passenger rights is not yet EU law. Today’s fixed compensation sums still come from Article 7(1) of Regulation (EC) No 261/2004 — Kepi does not quote future reform amounts.`,
+    officialUrl: EC261_REFORM_AGREEMENT_URL,
+  };
 }
 
 export function buildEc261CoachContent(reason: StrandedDisruptionReason): Ec261CoachContent {
@@ -99,6 +130,14 @@ export function buildEc261CoachContent(reason: StrandedDisruptionReason): Ec261C
           : "EU air passenger rights (Regulation 261/2004)";
 
   const steps: Ec261CoachStep[] = [
+    {
+      id: "official-overview",
+      title: "Read the official overview",
+      detail:
+        "Your Europe explains when EU air passenger rights apply, what care carriers must provide, and how to complain — in plain language linked to the regulation.",
+      officialUrl: EC261_YOUR_EUROPE_URL,
+      officialLabel: "Your Europe — air passenger rights",
+    },
     {
       id: "now-desk",
       title: "At the airline desk now",
@@ -123,24 +162,35 @@ export function buildEc261CoachContent(reason: StrandedDisruptionReason): Ec261C
       id: "escalate",
       title: "If the airline refuses or stalls",
       detail:
-        "Escalate to the national enforcement body in the EU country where the incident occurred (or where the airline is established). They cannot obtain compensation for you but can pursue the airline.",
+        "Escalate to the national enforcement body (NEB) in the EU country where the incident occurred (or where the airline is established). They cannot obtain compensation for you but can pursue the airline.",
       officialUrl: EC261_ENFORCEMENT_BODIES_URL,
-      officialLabel: "EU national enforcement bodies",
+      officialLabel: "EU national enforcement bodies (NEB list)",
     },
+  ];
+
+  const checklist = [
+    "Confirm what happened (denied boarding, cancellation, or long delay).",
+    "Get written proof from the airline desk or app.",
+    "Ask for care while you wait (meals, hotel if overnight).",
+    "Check which distance band applies — measure the route, do not guess euros.",
+    "File with the operating carrier in writing.",
+    "Escalate to the national enforcement body if needed — Kepi does not file for you.",
   ];
 
   return {
     eligible,
     headline,
     intro:
-      "Kepi explains your options under EU law — we do not file claims or invent amounts. All euro figures below are fixed sums from Article 7(1) of Regulation (EC) No 261/2004.",
+      "Kepi is a rights-notice coach — we cite official sources and route you to the airline and NEB. We do not file claims or invent amounts. Euro figures below are fixed sums from Article 7(1) of Regulation (EC) No 261/2004 only.",
     compensationBands: EC261_ARTICLE_7_BANDS,
     careSummary: careSummaryForReason(reason),
     extraordinaryCircumstances:
       "Article 5(3): compensation may be reduced or not owed if the airline proves the disruption was caused by extraordinary circumstances (e.g. severe weather, security risks, air traffic control) that could not have been avoided even if all reasonable measures had been taken.",
+    reformNotice: buildEc261ReformNotice(),
     steps,
+    checklist,
     disclaimer:
-      "This is general guidance from the official regulation text, not legal advice. Eligibility depends on your specific flight, routing, and whether the departure/arrival is in the EU scope of the regulation.",
+      "This is general guidance from official regulation text and EU public pages, not legal advice. Eligibility depends on your specific flight, routing, and whether the departure/arrival is in the EU scope of the regulation.",
   };
 }
 

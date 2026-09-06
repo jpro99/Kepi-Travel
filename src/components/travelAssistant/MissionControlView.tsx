@@ -30,6 +30,7 @@ import {
   resolveAirborneHeroCopy,
 } from "@/lib/travelAssistant/airborneLiveClaim";
 import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
+import { resolveDayOfStatusChrome } from "@/lib/travelAssistant/dayOfStatusChrome";
 import { resolveTripWalk } from "@/lib/travelAssistant/tripWalk";
 import {
   buildTripReadinessSummary,
@@ -67,6 +68,10 @@ export interface MissionControlLiveStatus {
   checkedAt?: string;
   busy?: boolean;
   error?: string | null;
+  bookedStatus?: string;
+  bookedGate?: string;
+  pushStatus?: string;
+  pushGate?: string;
 }
 
 export interface MissionControlViewProps {
@@ -341,6 +346,22 @@ export function MissionControlView({
     locationStatus === "at-airport" || locationStatus === "in-terminal";
 
   const nextFlightLive = snap.nextFlight ? liveStatus?.[snap.nextFlight.id] : undefined;
+
+  const dayOfStatusChrome = useMemo(() => {
+    if (!snap.nextFlight) return null;
+    const flight = snap.nextFlight;
+    return resolveDayOfStatusChrome({
+      bookedStatus: nextFlightLive?.bookedStatus,
+      liveStatus: nextFlightLive?.flightStatus,
+      liveCheckedAt: nextFlightLive?.checkedAt,
+      liveError: nextFlightLive?.error,
+      pushStatus: nextFlightLive?.pushStatus,
+      pushGate: nextFlightLive?.pushGate,
+      bookedGate: flight.flightDepartureGate ?? nextFlightLive?.bookedGate,
+      liveGate: nextFlightLive?.departureGate,
+      departureIata: flight.flightDepartureAirport,
+    });
+  }, [snap.nextFlight, nextFlightLive]);
 
   const strandedDetection = useMemo(() => {
     if (!snap.nextFlight || journeyPhase?.kind === "airborne") {
@@ -942,6 +963,24 @@ export function MissionControlView({
           </p>
         ) : null}
 
+        {showTravelOps && dayOfStatusChrome?.banner ? (
+          <div
+            className={`mt-3 rounded-xl px-3 py-3 text-left ${
+              dayOfStatusChrome.banner.kind === "cancel"
+                ? "bg-rose-50 ring-1 ring-rose-200"
+                : "bg-amber-50 ring-1 ring-amber-200"
+            }`}
+            data-testid="day-of-status-banner"
+          >
+            <p className="text-[13px] font-bold uppercase tracking-wide text-[#C93400]">
+              {dayOfStatusChrome.banner.title}
+            </p>
+            <p className="mt-1 text-[15px] leading-relaxed text-[#1D1D1F]">
+              {dayOfStatusChrome.banner.body}
+            </p>
+          </div>
+        ) : null}
+
         {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day" || stayCoachLead) ? (
           <button
             type="button"
@@ -956,8 +995,27 @@ export function MissionControlView({
               {snap.nextFlight.flightDepartureAirport} → {snap.nextFlight.flightArrivalAirport}
             </p>
             <p className="mt-1 text-[14px] text-[#007AFF]">
-              {formatFlightStatusTrustLine(liveStatus?.[snap.nextFlight.id])}
+              {formatFlightStatusTrustLine({
+                ...nextFlightLive,
+                bookedGate: snap.nextFlight.flightDepartureGate,
+                bookedStatus: nextFlightLive?.bookedStatus,
+                departureIata: snap.nextFlight.flightDepartureAirport,
+              })}
             </p>
+            {dayOfStatusChrome?.badge && !dayOfStatusChrome.banner ? (
+              <p
+                className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+                  dayOfStatusChrome.badge.tone === "urgent"
+                    ? "bg-rose-100 text-rose-800"
+                    : dayOfStatusChrome.badge.tone === "watch"
+                      ? "bg-amber-100 text-amber-900"
+                      : "bg-[#E8F2FF] text-[#007AFF]"
+                }`}
+                data-testid="day-of-status-badge"
+              >
+                {dayOfStatusChrome.badge.label}
+              </p>
+            ) : null}
           </button>
         ) : null}
 

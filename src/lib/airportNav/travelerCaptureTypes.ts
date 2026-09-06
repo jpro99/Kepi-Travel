@@ -24,6 +24,8 @@ export interface TravelerCaptureRecord {
   gateString?: string | null;
   mapMark?: TravelerCaptureMapMark | null;
   note?: string | null;
+  /** True when a photo blob is stored locally in IndexedDB (may not be synced yet). */
+  hasLocalPhoto?: boolean;
   capturedAt: string;
   syncStatus: TravelerCaptureSyncStatus;
   syncedAt?: string | null;
@@ -31,11 +33,15 @@ export interface TravelerCaptureRecord {
 }
 
 export interface TravelerCaptureSubmitInput {
+  /** Idempotent op id — client generates once per capture attempt. */
+  id?: string;
   tripId: string;
   reservationId?: string | null;
   iata: string;
   gateString?: string | null;
   mapMark?: TravelerCaptureMapMark | null;
   note?: string | null;
+  /** JPEG/PNG data URL — stored in IndexedDB; synced when small enough. */
+  photoDataUrl?: string | null;
   capturedAt?: string;
 }
