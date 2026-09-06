@@ -7,6 +7,7 @@ import {
   travelerTodayKey,
 } from "@/lib/travelAssistant/homeTodayCoach";
 import { selectNextRemainingFlight } from "@/lib/travelAssistant/flightSort";
+import { buildTrainTicketHandoffContent } from "@/lib/travelAssistant/trainTicketHandoff";
 
 const EUROPE_PUGLIA = [
   {
@@ -91,7 +92,36 @@ const EUROPE_PUGLIA = [
   },
 ] as const;
 
+const NEREA_MONOPOLI_TRAIN = [
+  ...EUROPE_PUGLIA.filter((row) => row.id !== "monopoli"),
+  {
+    id: "nerea",
+    type: "hotel",
+    title: "NEREA - Apulian Suite and Rooms",
+    provider: "Booking.com",
+    localTime: "2026-09-05",
+    checkOutDate: "2026-09-08",
+    location: "Monopoli, Italy",
+    hotelSearchCity: "Monopoli",
+    timezone: "Europe/Rome",
+  },
+  {
+    id: "train-mon-lecce",
+    type: "train",
+    title: "Regionale Veloce 4393",
+    provider: "Trenitalia",
+    trainNumber: "4393",
+    localTime: "2026-09-08 09:42",
+    location: "Monopoli → Lecce",
+    confirmationCode: "ABC123",
+    timezone: "Europe/Rome",
+    hasPdfAttachment: true,
+    originalEmailText: "Trenitalia Regionale Veloce 4393 Monopoli Lecce",
+  },
+] as const;
+
 const SEP_4_ROME = Date.parse("2026-09-04T10:00:00Z");
+const SEP_6_ROME = Date.parse("2026-09-06T10:00:00Z");
 
 test("resolveActiveHotelForDay prefers Polignano over Bari proxy on overlapping nights", () => {
   const hotels = EUROPE_PUGLIA.filter((row) => row.type === "hotel");
@@ -116,6 +146,53 @@ test("G49: mid-stay Home coach leads Polignano, Monopoli tomorrow, train tip", (
   const next = homeTodayCoachNextAction(coach!);
   assert.match(next.title, /Monopoli/i);
   assert.ok(!/AS654|Alaska|ONT/i.test(next.title));
+});
+
+test("G51: Monopoli mid-stay says city once; next travel day is Sep 8 train", () => {
+  const coach = buildHomeTodayCoach({
+    reservations: [...NEREA_MONOPOLI_TRAIN],
+    nowMs: SEP_6_ROME,
+    timezone: "Europe/Rome",
+  });
+  assert.ok(coach);
+  assert.match(coach!.leadTitle, /Monopoli/i);
+  assert.match(coach!.leadDetail ?? "", /NEREA/i);
+  assert.ok(coach!.nextTravelMove);
+  assert.equal(coach!.nextTravelMove!.dateKey, "2026-09-08");
+  assert.match(coach!.nextTravelMove!.dayLabel, /Sep 8/i);
+  assert.match(coach!.nextTravelMove!.headline, /Monopoli.*Lecce/i);
+  assert.match(coach!.nextTravelMove!.detail, /4393|Trenitalia/i);
+  assert.match(coach!.leaveCue ?? "", /Checkout|train departs|Sep 8/i);
+
+  const handoff = buildTrainTicketHandoffContent(
+    NEREA_MONOPOLI_TRAIN.find((row) => row.id === "train-mon-lecce")!,
+    "trip-europe-2026",
+  );
+  assert.ok(handoff);
+  assert.equal(handoff!.primaryActionLabel, "Train tickets");
+
+  const next = homeTodayCoachNextAction(coach!, {
+    hasTrainTicketHandoff: true,
+    ticketUrl: handoff!.primaryActionUrl,
+  });
+  assert.equal(next.eyebrow, "Next travel day");
+  assert.match(next.title, /Sep 8/i);
+  assert.match(next.title, /Monopoli.*Lecce/i);
+  assert.ok(!/^You're in Monopoli$/iu.test(next.title));
+  assert.equal(next.ctaLabel, "Train tickets");
+  assert.ok(next.prepHref);
+});
+
+test("G51: coach next action does not repeat You're in {city} on stay days", () => {
+  const coach = buildHomeTodayCoach({
+    reservations: [...NEREA_MONOPOLI_TRAIN],
+    nowMs: SEP_6_ROME,
+    timezone: "Europe/Rome",
+  });
+  assert.ok(coach);
+  const next = homeTodayCoachNextAction(coach!);
+  assert.doesNotMatch(next.title, /^You're in /iu);
+  assert.doesNotMatch(next.eyebrow, /^Today$/iu);
 });
 
 test("G50: remaining-pick is next future departure, not Day 1 Alaska replay", () => {

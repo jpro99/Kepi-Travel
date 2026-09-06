@@ -1,12 +1,13 @@
 /**
  * Home today-first stay coach — calendar today + active booked stay win over
- * trip-start replay and remaining-flight headlines (I32 / G49).
+ * trip-start replay and remaining-flight headlines (I32 / G49 / G51).
  */
 
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import { deriveHotelSearchCityFromReservation, citiesLikelySame } from "@/lib/hotels/hotelReservationCity";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 import { isLocalGroundHop } from "@/lib/travelAssistant/metroAirportCoverage";
+import { isPlannedReservation } from "@/lib/travelAssistant/plannedReservationMatch";
 import type { HomeNextAction } from "@/lib/travelAssistant/homeNextAction";
 
 export interface HomeStayReservation {
@@ -20,6 +21,22 @@ export interface HomeStayReservation {
   checkOutDate?: string;
   notes?: string;
   timezone?: string;
+  trainNumber?: string;
+  plannedOnly?: boolean;
+  confirmationCode?: string | null;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
+  flightNumber?: string;
+  flightDate?: string;
+}
+
+export interface HomeNextTravelMove {
+  dateKey: string;
+  dayLabel: string;
+  headline: string;
+  detail: string;
+  kind: "train" | "flight" | "checkout";
+  reservationId?: string;
 }
 
 export interface HomeTodayCoach {
@@ -31,6 +48,8 @@ export interface HomeTodayCoach {
   tomorrowDetail: string | null;
   transferHint: string | null;
   transferHref: string | null;
+  nextTravelMove: HomeNextTravelMove | null;
+  leaveCue: string | null;
 }
 
 const MS_DAY = 86_400_000;
@@ -208,6 +227,214 @@ export function travelerTodayKey(nowMs: number, timezone?: string | null): strin
   return new Date(nowMs).toISOString().slice(0, 10);
 }
 
+function formatShortDayLabel(dateKey: string, timezone?: string | null): string {
+  const ms = Date.parse(`${dateKey}T12:00:00Z`);
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone?.trim() || "UTC",
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    }).format(new Date(ms));
+  } catch {
+    return dateKey;
+  }
+}
+
+function formatLocalTime(localTime: string | undefined): string | null {
+  const match = (localTime ?? "").match(/\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/u);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = match[2];
+  const ampm = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+  return `${hour}:${minute} ${ampm}`;
+}
+
+function isBookedTrain(reservation: HomeStayReservation): boolean {
+  if ((reservation.type ?? "").toLowerCase() !== "train") return false;
+  if (reservation.plannedOnly === true) return false;
+  if (isPlannedReservation(reservation)) return false;
+  return true;
+}
+
+function isBookedFlight(reservation: HomeStayReservation): boolean {
+  if ((reservation.type ?? "").toLowerCase() !== "flight") return false;
+  if (reservation.plannedOnly === true) return false;
+  if (isPlannedReservation(reservation)) return false;
+  return Boolean(reservation.flightDepartureAirport || reservation.flightNumber);
+}
+
+function trainDetail(reservation: HomeStayReservation): string {
+  const time = formatLocalTime(reservation.localTime);
+  const code = reservation.confirmationCode?.trim();
+  const bits: string[] = [];
+  if (time) bits.push(`Departs ${time}`);
+  if (code) bits.push(`Confirmation ${code}`);
+  return bits.join(" · ") || "Your booked train.";
+}
+
+function flightHeadline(reservation: HomeStayReservation): string {
+  const from = reservation.flightDepartureAirport?.trim() || "";
+  const to = reservation.flightArrivalAirport?.trim() || "";
+  const route = from && to ? `${from} → ${to}` : reservation.location?.trim() || "Flight";
+  const num = reservation.flightNumber?.trim();
+  return num ? `${num} · ${route}` : route;
+}
+
+function flightDetail(reservation: HomeStayReservation): string {
+  const time = formatLocalTime(reservation.flightDepartureTime ?? reservation.localTime);
+  return time ? `Departs ${time}` : "Your booked flight.";
+}
+
+interface MoveCandidate {
+  dateKey: string;
+  kind: HomeNextTravelMove["kind"];
+  reservation: HomeStayReservation;
+  priority: number;
+}
+
+function findNextTravelMove(input: {
+  reservations: HomeStayReservation[];
+  todayKey: string;
+  activeHotel: HomeStayReservation | null;
+  stopRanges: StopDateRange[];
+  timezone?: string | null;
+}): HomeNextTravelMove | null {
+  const candidates: MoveCandidate[] = [];
+
+  for (const reservation of input.reservations) {
+    if (isBookedTrain(reservation)) {
+      const dateKey = dateOnly(reservation.localTime);
+      if (dateKey && dateKey > input.todayKey) {
+        candidates.push({ dateKey, kind: "train", reservation, priority: 0 });
+      }
+    }
+    if (isBookedFlight(reservation)) {
+      const dateKey =
+        dateOnly(reservation.flightDate) ||
+        dateOnly(reservation.localTime) ||
+        dateOnly(reservation.flightDepartureTime);
+      if (dateKey && dateKey > input.todayKey) {
+        candidates.push({ dateKey, kind: "flight", reservation, priority: 2 });
+      }
+    }
+  }
+
+  if (input.activeHotel) {
+    const checkout = dateOnly(input.activeHotel.checkOutDate);
+    if (checkout && checkout > input.todayKey) {
+      candidates.push({
+        dateKey: checkout,
+        kind: "checkout",
+        reservation: input.activeHotel,
+        priority: 1,
+      });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+    return a.priority - b.priority;
+  });
+
+  const earliestDate = candidates[0]!.dateKey;
+  const onDay = candidates.filter((row) => row.dateKey === earliestDate);
+  const train = onDay.find((row) => row.kind === "train");
+  const flight = onDay.find((row) => row.kind === "flight");
+  const checkout = onDay.find((row) => row.kind === "checkout");
+
+  const dayLabel = formatShortDayLabel(earliestDate, input.timezone);
+
+  if (train) {
+    const reservation = train.reservation;
+    const route = reservation.location?.trim() || "Train";
+    const label = [reservation.provider?.trim(), reservation.trainNumber?.trim() || reservation.title?.trim()]
+      .filter(Boolean)
+      .join(" ");
+    const time = formatLocalTime(reservation.localTime);
+    const detailBits = [label, time ? `Departs ${time}` : ""].filter(Boolean);
+    return {
+      dateKey: earliestDate,
+      dayLabel,
+      headline: route,
+      detail: detailBits.join(" · ") || trainDetail(reservation),
+      kind: "train",
+      reservationId: reservation.id,
+    };
+  }
+
+  if (flight) {
+    return {
+      dateKey: earliestDate,
+      dayLabel,
+      headline: flightHeadline(flight.reservation),
+      detail: flightDetail(flight.reservation),
+      kind: "flight",
+      reservationId: flight.reservation.id,
+    };
+  }
+
+  if (checkout) {
+    const nextStay = findNextStayDestination({
+      hotels: input.reservations.filter((row) => row.type === "hotel"),
+      stopRanges: input.stopRanges,
+      afterDateKey: addIsoDays(earliestDate, -1),
+    });
+    const fromCity = stayCityLabel(checkout.reservation);
+    const headline = nextStay
+      ? `${fromCity} → ${nextStay.city}`
+      : `Checkout from ${fromCity}`;
+    const detail = nextStay?.lodgingName
+      ? `Checkout · next stay ${nextStay.lodgingName}`
+      : "Checkout day — confirm time with the property.";
+    return {
+      dateKey: earliestDate,
+      dayLabel,
+      headline,
+      detail,
+      kind: "checkout",
+      reservationId: checkout.reservation.id,
+    };
+  }
+
+  return null;
+}
+
+function buildLeaveCue(input: {
+  activeHotel: HomeStayReservation | null;
+  nextTravelMove: HomeNextTravelMove | null;
+  todayKey: string;
+  timezone?: string | null;
+}): string | null {
+  const { nextTravelMove, activeHotel } = input;
+  if (!nextTravelMove) return null;
+
+  const checkout = activeHotel ? dateOnly(activeHotel.checkOutDate) : "";
+  const checkoutSameDay = checkout && checkout === nextTravelMove.dateKey;
+  const checkoutLabel = checkoutSameDay ? formatShortDayLabel(checkout, input.timezone) : null;
+
+  if (nextTravelMove.kind === "train") {
+    const dep = nextTravelMove.detail.match(/Departs ([\d:]+\s*[AP]M)/u)?.[1];
+    if (checkoutLabel && dep) {
+      return `Checkout ${checkoutLabel} · train departs ${dep}`;
+    }
+    if (dep) return `Train departs ${dep} · ${nextTravelMove.dayLabel}`;
+    return `Next move ${nextTravelMove.dayLabel}`;
+  }
+
+  if (nextTravelMove.kind === "flight") {
+    const dep = nextTravelMove.detail.match(/Departs ([\d:]+\s*[AP]M)/u)?.[1];
+    if (dep) return `Flight departs ${dep} · ${nextTravelMove.dayLabel}`;
+    return `Next move ${nextTravelMove.dayLabel}`;
+  }
+
+  if (checkoutLabel) return `Checkout ${checkoutLabel}`;
+  return `Next move ${nextTravelMove.dayLabel}`;
+}
+
 export function buildHomeTodayCoach(input: {
   reservations: HomeStayReservation[];
   stopRanges?: StopDateRange[];
@@ -216,13 +443,11 @@ export function buildHomeTodayCoach(input: {
 }): HomeTodayCoach | null {
   const nowMs = input.nowMs ?? Date.now();
   const stopRanges = input.stopRanges ?? [];
+  const timezone = input.timezone ?? null;
+  const todayKey = travelerTodayKey(nowMs, timezone);
   const hotels = input.reservations.filter((row) => row.type === "hotel");
-  const activeHotel = resolveActiveHotelForDay(hotels, travelerTodayKey(nowMs, input.timezone), stopRanges);
-  const placeCity = resolvePlaceCity(
-    activeHotel,
-    stopRanges,
-    travelerTodayKey(nowMs, input.timezone),
-  );
+  const activeHotel = resolveActiveHotelForDay(hotels, todayKey, stopRanges);
+  const placeCity = resolvePlaceCity(activeHotel, stopRanges, todayKey);
   if (!placeCity) return null;
 
   const lodgingName = activeHotel
@@ -235,7 +460,6 @@ export function buildHomeTodayCoach(input: {
       })
     : null;
 
-  const todayKey = travelerTodayKey(nowMs, input.timezone);
   const checkoutTomorrow =
     activeHotel != null && dateOnly(activeHotel.checkOutDate) === addIsoDays(todayKey, 1);
 
@@ -267,6 +491,21 @@ export function buildHomeTodayCoach(input: {
     }
   }
 
+  const nextTravelMove = findNextTravelMove({
+    reservations: input.reservations,
+    todayKey,
+    activeHotel,
+    stopRanges,
+    timezone,
+  });
+
+  const leaveCue = buildLeaveCue({
+    activeHotel,
+    nextTravelMove,
+    todayKey,
+    timezone,
+  });
+
   const leadTitle = `You're in ${placeCity}`;
   const leadDetail = lodgingName && !citiesLikelySame(lodgingName, placeCity) ? lodgingName : null;
 
@@ -279,10 +518,29 @@ export function buildHomeTodayCoach(input: {
     tomorrowDetail,
     transferHint,
     transferHref,
+    nextTravelMove,
+    leaveCue,
   };
 }
 
-export function homeTodayCoachNextAction(coach: HomeTodayCoach): HomeNextAction {
+export function homeTodayCoachNextAction(
+  coach: HomeTodayCoach,
+  options?: { hasTrainTicketHandoff?: boolean; ticketUrl?: string | null },
+): HomeNextAction {
+  if (coach.nextTravelMove) {
+    const move = coach.nextTravelMove;
+    const hasTickets = Boolean(options?.hasTrainTicketHandoff && options?.ticketUrl);
+    return {
+      kind: hasTickets || move.kind === "train" ? "prep" : move.kind === "flight" ? "flight" : "ready",
+      eyebrow: "Next travel day",
+      title: `${move.dayLabel} — ${move.headline}`,
+      detail: move.detail,
+      ctaLabel: hasTickets ? "Train tickets" : move.kind === "flight" ? "Open flight" : "Open Plan",
+      prepHref: hasTickets ? options?.ticketUrl ?? undefined : undefined,
+      reservationId: move.reservationId,
+    };
+  }
+
   if (coach.tomorrowDetail) {
     return {
       kind: coach.transferHref ? "prep" : "ready",
@@ -296,9 +554,11 @@ export function homeTodayCoachNextAction(coach: HomeTodayCoach): HomeNextAction 
 
   return {
     kind: "ready",
-    eyebrow: "Today",
-    title: coach.leadTitle,
-    detail: coach.leadDetail ?? "Enjoy the day — open Plan for notes and bookings.",
+    eyebrow: "Your stay",
+    title: "Enjoy the day",
+    detail: coach.leadDetail
+      ? `${coach.leadDetail} — open Plan for notes and bookings.`
+      : "Open Plan for notes and bookings.",
     ctaLabel: "Open Plan",
   };
 }

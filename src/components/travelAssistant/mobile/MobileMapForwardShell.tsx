@@ -346,6 +346,7 @@ export function MobileMapForwardShell({
           onOpenReadiness={onOpenReadiness}
           stopRanges={effectiveStopRanges ?? stopRanges}
           travelerTimezone={travelerTimezone}
+          tripId={tripId}
         />
 
         {hasActiveTrip && tripSpendSummary ? (

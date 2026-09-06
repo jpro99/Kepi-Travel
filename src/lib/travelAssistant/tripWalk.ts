@@ -132,8 +132,10 @@ export function resolveTripWalk(input: {
   tripStatus?: ReadinessStatus;
   /** G46 — specific airport line replaces generic Open Airport Mode. */
   airportSpotlight?: HomeNextAction | null;
-  /** G49 — stay coach beats remaining-flight headline mid-trip. */
+  /** G49 — stay coach beats remaining-flight headline on mid-stay days. */
   todayCoach?: HomeNextAction | null;
+  /** G51 — honest leave cue on stay days (checkout / train dep), not drive-time fallback. */
+  stayLeaveCue?: string | null;
 }): TripWalk {
   const stored =
     input.storedDepartureGate ?? input.nextFlight?.flightDepartureGate ?? null;
@@ -218,7 +220,7 @@ export function resolveTripWalk(input: {
     phase,
     okay: { ok, line: okayLine },
     next,
-    leaveBy: input.leaveByHint ?? null,
+    leaveBy: input.stayLeaveCue ?? input.leaveByHint ?? null,
     canBreak: canBreak.slice(0, 3),
     gateChange,
   };

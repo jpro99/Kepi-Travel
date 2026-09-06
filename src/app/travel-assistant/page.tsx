@@ -10579,6 +10579,7 @@ export default function TravelAssistantPage() {
                 travelerType={neuroTravelerType}
                 stopRanges={effectiveStopRanges}
                 travelerTimezone={travelerTimezoneForHome}
+                tripId={activeTripId}
               />
             )
           ) : consumerTab === "itinerary" ? (
