@@ -291,13 +291,17 @@ import { openSupportChat } from "@/components/support/SupportChat";
 import { setSupportLiveContext } from "@/lib/support/clientSupportContext";
 import {
   resolveSnapshotApplyOptions,
+  shouldRunForegroundSoftRefresh,
   shouldShowTripShellSkeleton,
 } from "@/lib/travelAssistant/softTripRefresh";
 import { formatTravelerCaptureFactsLine } from "@/lib/airportNav/travelerCapture";
 import {
+  countPendingTravelerCaptures,
   listLocalTravelerCaptures,
+  listLocalTravelerCapturesSync,
   syncPendingTravelerCaptures,
 } from "@/lib/airportNav/travelerCaptureLocal";
+import { subscribeTravelerCaptureDrain, wireTravelerCaptureDrain } from "@/lib/airportNav/travelerCaptureDrain";
 import {
   getPersistedCaptureTripId,
   persistCaptureTripId,
@@ -1832,6 +1836,7 @@ export default function TravelAssistantPage() {
   const [tripsLoading, setTripsLoading] = useState(true);
   const [tripsHydrated, setTripsHydrated] = useState(false);
   const [travelerCaptureTick, setTravelerCaptureTick] = useState(0);
+  const [pendingCaptureCount, setPendingCaptureCount] = useState(0);
   const [upgradeModalGate, setUpgradeModalGate] = useState<UpgradeModalGateContext | null>(null);
   const [highlightedReservationId, setHighlightedReservationId] = useState<string | null>(null);
   const [tripStage, setTripStage] = useState<TripStage>("readiness");
@@ -3187,7 +3192,7 @@ export default function TravelAssistantPage() {
     // type is spelled out explicitly here rather than derived.
     let timer: number | null = null;
     const pollTrips = () => {
-      if (!tripsHydratedRef.current || document.visibilityState === "hidden") {
+      if (!tripsHydratedRef.current || !shouldRunForegroundSoftRefresh()) {
         return;
       }
       void refreshTripsFromServer({ background: true }).catch(() => {
@@ -3195,6 +3200,7 @@ export default function TravelAssistantPage() {
       });
       void syncPendingTravelerCaptures().then((count) => {
         if (count > 0) setTravelerCaptureTick((value) => value + 1);
+        void countPendingTravelerCaptures().then(setPendingCaptureCount);
       });
     };
     timer = window.setInterval(pollTrips, 120_000);
@@ -3214,6 +3220,22 @@ export default function TravelAssistantPage() {
       window.removeEventListener("online", handleOnline);
     };
   }, [refreshTripsFromServer]);
+
+  useEffect(() => {
+    void listLocalTravelerCaptures().then(() => {
+      void countPendingTravelerCaptures().then(setPendingCaptureCount);
+      setTravelerCaptureTick((value) => value + 1);
+    });
+    const unwireDrain = wireTravelerCaptureDrain();
+    const unsubDrain = subscribeTravelerCaptureDrain(() => {
+      void countPendingTravelerCaptures().then(setPendingCaptureCount);
+      setTravelerCaptureTick((value) => value + 1);
+    });
+    return () => {
+      unwireDrain();
+      unsubDrain();
+    };
+  }, []);
 
   const flightStatusPollProximity = useMemo((): FlightStatusPollProximity => {
     if (!activeTripId || !reservations.length) return "away";
@@ -5299,7 +5321,7 @@ export default function TravelAssistantPage() {
     const tripId =
       activeTripId ?? getPersistedCaptureTripId() ?? searchParams.get("tripId")?.trim() ?? null;
     if (!tripId) return null;
-    const captures = listLocalTravelerCaptures(tripId);
+    const captures = listLocalTravelerCapturesSync(tripId);
     return formatTravelerCaptureFactsLine(captures[0] ?? null);
   }, [activeTripId, travelerCaptureTick, searchParams]);
 
@@ -12268,6 +12290,7 @@ export default function TravelAssistantPage() {
         userLat={guidanceUserLat}
         userLon={guidanceUserLon}
         userAccuracyM={null}
+        pendingOutboxCount={pendingCaptureCount}
       />
     </main>
   );
