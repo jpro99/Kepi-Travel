@@ -1,0 +1,221 @@
+{
+  "cityId": "lecce",
+  "cityLabel": "Lecce, Italy",
+  "verifiedAt": "2026-09-06",
+  "sources": [
+    {
+      "id": "lecce-tourism-official",
+      "kind": "official_text",
+      "label": "Comune di Lecce / Turismo",
+      "url": "https://www.comune.lecce.it/"
+    }
+  ],
+  "stops": [
+    {
+      "id": "basilica-santa-croce",
+      "name": "Basilica di Santa Croce",
+      "kind": "church",
+      "lat": 40.3546892,
+      "lng": 18.1732552,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "way/299719056"
+      },
+      "paceTags": ["easy", "full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "duomo-lecce",
+      "name": "Duomo di Lecce",
+      "kind": "church",
+      "lat": 40.3517817,
+      "lng": 18.1693644,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "way/299833831"
+      },
+      "paceTags": ["easy", "full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "piazza-sant-oronzo",
+      "name": "Piazza Sant'Oronzo",
+      "kind": "walk",
+      "lat": 40.3527927,
+      "lng": 18.1726414,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "way/1105277540"
+      },
+      "paceTags": ["easy", "full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "anfiteatro-romano",
+      "name": "Anfiteatro Romano",
+      "kind": "viewpoint",
+      "lat": 40.3525492,
+      "lng": 18.1724794,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "way/300753266"
+      },
+      "paceTags": ["easy", "full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "porta-napoli",
+      "name": "Porta Napoli",
+      "kind": "viewpoint",
+      "lat": 40.356455,
+      "lng": 18.1685486,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "way/299716997"
+      },
+      "paceTags": ["full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "castello-carlo-v",
+      "name": "Castello di Carlo V",
+      "kind": "museum",
+      "lat": 40.3523807,
+      "lng": 18.1746463,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "relation/3987172"
+      },
+      "paceTags": ["full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "chiesa-santa-chiara",
+      "name": "Chiesa di Santa Chiara",
+      "kind": "church",
+      "lat": 40.351792,
+      "lng": 18.1712622,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "way/299719063"
+      },
+      "paceTags": ["easy", "full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "palazzo-celestini",
+      "name": "Palazzo dei Celestini",
+      "kind": "viewpoint",
+      "lat": 40.3551724,
+      "lng": 18.1735771,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "relation/3985405"
+      },
+      "paceTags": ["full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "museo-faggiano",
+      "name": "Museo Faggiano",
+      "kind": "museum",
+      "lat": 40.3501088,
+      "lng": 18.1723829,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "node/3874335810"
+      },
+      "paceTags": ["full", "ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "museo-castromediano",
+      "name": "Museo Sigismondo Castromediano",
+      "kind": "museum",
+      "lat": 40.3469773,
+      "lng": 18.1703514,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "node/1707059658"
+      },
+      "paceTags": ["ambitious"],
+      "officialListRef": "lecce-tourism-official"
+    },
+    {
+      "id": "via-libertini-walk",
+      "name": "Via Libertini (historic walk)",
+      "kind": "walk",
+      "lat": 40.35145,
+      "lng": 18.1658338,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "way/290916863"
+      },
+      "paceTags": ["full", "ambitious"]
+    },
+    {
+      "id": "torre-del-parco",
+      "name": "Torre del Parco",
+      "kind": "viewpoint",
+      "lat": 40.3473153,
+      "lng": 18.1799855,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "way/299716622"
+      },
+      "paceTags": ["ambitious"]
+    },
+    {
+      "id": "gelateria-natale",
+      "name": "Pasticceria Gelateria Natale",
+      "kind": "gelato",
+      "lat": 40.353344,
+      "lng": 18.1734081,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "node/1533381456"
+      },
+      "paceTags": ["easy", "full", "ambitious"]
+    },
+    {
+      "id": "caffe-paisiello",
+      "name": "Caffè Paisiello",
+      "kind": "food",
+      "lat": 40.3552393,
+      "lng": 18.1684911,
+      "dwell": { "unknown": true },
+      "source": {
+        "kind": "osm",
+        "label": "OpenStreetMap",
+        "ref": "node/3075770421"
+      },
+      "paceTags": ["easy", "full", "ambitious"]
+    }
+  ]
+}

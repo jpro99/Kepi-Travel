@@ -281,6 +281,11 @@ Local-first capture outbox survives kill/offline (aligned with Fix belt replay).
 
 **Test:** `src/lib/airportNav/gateHarvestCorroboration.test.ts`, `src/lib/airportNav/travelerCapture.test.ts`
 
+**F20 — Plan City provenance (pre-trip day planner)**  
+Plan City stops must ship with source (`official_text` | `osm` | `licensed_reviews` | `traveler_saved`). Missing dwell/hours stays missing. Pace filters density only — never LLM-invent POIs, blogs, or “best gelato.” Walk gaps from OSM routing only; when routing fails, show unknown — never invent drive time. Save merges onto existing `itineraryPlans.dayPlans` bullets.
+
+**Test:** `src/lib/planCity/provenance.test.ts`, `src/lib/planCity/paceFilter.test.ts`, `src/lib/planCity/saveToDayPlan.test.ts`, `src/lib/planCity/resolveCityKey.test.ts`
+
 **F15 — Next flight is earliest remaining departure, not storage order**  
 Home, Airport Mode, Book → Flights, and check-in handoff must pick the chronologically next booked segment (timezone-aware departure clock), including domestic connectors. Storage array order and long-haul role never override clock time — ONT→SEA before SEA→FCO on the same travel day. When `localTime` and `flightDepartureTime` disagree on the same day, use the later booked clock for sorting (live status may pull `localTime` earlier; delay updates push it later). Departure UTC conversion must use the **departure-airport IATA timezone**, not stored `flight.timezone` when it bleeds (e.g. `Europe/Rome` on a SEA departure would sort as 8:30 AM Pacific). Home TODAY uses `selectNextRemainingFlight` + `getLeaveByHint` on that pick — not a separate travel-day picker; leave-by labels render in departure-airport local time.
 
@@ -1049,6 +1054,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | F16 | `src/lib/travelAssistant/airborneLiveClaim.test.ts` |
 | F18 | `src/lib/travelAssistant/provenanceChargeLiveActivity.test.ts`, `src/lib/airportNav/gateVisionExtract.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | F19 | `src/lib/airportNav/gateHarvestCorroboration.test.ts`, `src/lib/airportNav/travelerCapture.test.ts` |
+| F20 | `src/lib/planCity/provenance.test.ts`, `src/lib/planCity/paceFilter.test.ts`, `src/lib/planCity/saveToDayPlan.test.ts`, `src/lib/planCity/resolveCityKey.test.ts` |
 | F15 | `src/lib/travelAssistant/flightSort.test.ts` |
 | F3 | `src/lib/travelAssistant/tripTransportRoute.test.ts` |
 | F7 | `src/lib/travelAssistant/itineraryPathCoverage.test.ts` |

@@ -52,6 +52,7 @@ interface HotelsTabProps {
   staySegments?: TripStaySegment[];
   plannedStayCities?: PlannedStayCity[];
   onPickPlannedCity?: (city: PlannedStayCity) => void;
+  onPlanCity?: (city: PlannedStayCity) => void;
   onReservationTap: (id: string) => void;
   onCheckStatus: (id: string) => void;
   onDelete: (id: string) => void;
@@ -126,6 +127,7 @@ export function HotelsTab({
   staySegments = [],
   plannedStayCities = [],
   onPickPlannedCity,
+  onPlanCity,
   onReservationTap,
   onCheckStatus,
   onDelete,
@@ -296,6 +298,7 @@ export function HotelsTab({
           cities={plannedStayCities}
           tripName={tripName}
           onPickCity={onPickPlannedCity}
+          onPlanCity={onPlanCity}
         />
       ) : null}
 

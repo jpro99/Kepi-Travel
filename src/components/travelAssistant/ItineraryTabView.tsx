@@ -88,6 +88,7 @@ interface ItineraryTabViewProps {
   travelerType?: TravelStyleMode | null;
   unresolvedReviewCount?: number;
   onOpenReview?: () => void;
+  onPlanCity?: (city: string, dateKey?: string) => void;
 }
 
 function formatHumanTripRange(start: string | null | undefined, end: string | null | undefined): string {
@@ -114,6 +115,7 @@ export function ItineraryTabView({
   onSkipPreDepartureNight: _onSkipPreDepartureNight,
   reservations,
   dayNotes,
+  stopRanges,
   planSubView,
   onPlanSubViewChange,
   selectedDateKey,
@@ -145,6 +147,7 @@ export function ItineraryTabView({
   travelerType = null,
   unresolvedReviewCount = 0,
   onOpenReview,
+  onPlanCity,
 }: ItineraryTabViewProps) {
   const tNav = useTranslations("ConsumerNav");
   const tPlan = useTranslations("PlanTab");
@@ -342,6 +345,27 @@ export function ItineraryTabView({
         </div>
       ) : null}
 
+      {stopRanges && stopRanges.length > 0 && onPlanCity ? (
+        <div className="rounded-2xl bg-[#F5F5F7] px-4 py-4">
+          <h3 className="text-[17px] font-semibold text-[#1D1D1F]">Plan your stay cities</h3>
+          <p className="mt-1 text-[13px] text-[#6E6E73]">
+            Pre-trip day planner with sourced stops — not day-of scramble.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {stopRanges.map((range) => (
+              <button
+                key={`${range.checkIn}-${range.stop.name}`}
+                type="button"
+                onClick={() => onPlanCity(range.stop.name, range.checkIn)}
+                className="min-h-[48px] rounded-full bg-white px-4 text-[15px] font-semibold text-[#007AFF] shadow-sm"
+              >
+                Plan {range.stop.name.split(",")[0]?.trim() ?? range.stop.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex rounded-2xl bg-[#F5F5F7] p-1">
         <button
           type="button"
@@ -376,6 +400,7 @@ export function ItineraryTabView({
             onDayNoteChange={handleDayNoteChange}
             onReservationTap={onReservationTap}
             selectedDateKey={selectedDateKey ?? scrollToDateKey}
+            onPlanCity={onPlanCity}
           />
         </div>
       ) : (

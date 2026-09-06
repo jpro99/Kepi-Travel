@@ -92,6 +92,7 @@ interface BookTabViewProps {
   staySegments?: TripStaySegment[];
   plannedStayCities?: PlannedStayCity[];
   onPickPlannedCity?: (city: PlannedStayCity) => void;
+  onPlanCity?: (city: PlannedStayCity) => void;
   hotelSearchDefaults?: HotelSearchDefaults;
   onLaunchHotelSearch?: (params: { city: string; cityIata?: string; checkIn: string; checkOut: string }) => void;
   onSearchHotels?: () => void;
@@ -144,6 +145,7 @@ export function BookTabView({
   staySegments,
   plannedStayCities,
   onPickPlannedCity,
+  onPlanCity,
   hotelSearchDefaults,
   onLaunchHotelSearch,
   onSearchHotels,
@@ -248,6 +250,7 @@ export function BookTabView({
           staySegments={staySegments}
           plannedStayCities={plannedStayCities}
           onPickPlannedCity={onPickPlannedCity}
+          onPlanCity={onPlanCity}
           onReservationTap={onReservationTap}
           onCheckStatus={onCheckStatus}
           onDelete={onDelete}

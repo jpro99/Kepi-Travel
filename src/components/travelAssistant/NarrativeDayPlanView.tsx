@@ -27,6 +27,7 @@ interface NarrativeDayPlanViewProps {
   onPasteDayPlan?: (sourceText: string) => void | Promise<void>;
   onReservationTap?: (id: string) => void;
   selectedDateKey?: string | null;
+  onPlanCity?: (city: string, dateKey?: string) => void;
 }
 
 export function NarrativeDayPlanView({
@@ -40,6 +41,7 @@ export function NarrativeDayPlanView({
   onDayNoteChange,
   onPasteDayPlan,
   selectedDateKey = null,
+  onPlanCity,
 }: NarrativeDayPlanViewProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -171,7 +173,18 @@ export function NarrativeDayPlanView({
               className={isSelected ? "rounded-xl bg-white/70 px-2 py-1" : ""}
             >
               {range ? (
-                <p className="mb-3 text-[17px] font-semibold text-[#1D1D1F]">{range.label}</p>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[17px] font-semibold text-[#1D1D1F]">{range.label}</p>
+                  {onPlanCity ? (
+                    <button
+                      type="button"
+                      onClick={() => onPlanCity(range.location, section.dateKey)}
+                      className="min-h-[44px] rounded-full bg-[#007AFF] px-4 text-[15px] font-semibold text-white"
+                    >
+                      Plan {range.location.split(",")[0]?.trim() ?? range.location}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
               <div className="mb-2 flex items-start justify-between gap-3">
                 <button

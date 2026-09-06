@@ -6,12 +6,15 @@ export interface PostBookingConfirmationData {
   confirmationCode?: string;
   detail: string;
   syncedToTrip?: boolean;
+  /** Stay cities to offer Plan City — derived from booked facts, never invented. */
+  planCityCities?: string[];
 }
 
 interface PostBookingConfirmationProps {
   data: PostBookingConfirmationData | null;
   onDismiss: () => void;
   onViewTrip?: () => void;
+  onPlanCity?: (city: string) => void;
 }
 
 const KIND_EMOJI: Record<PostBookingConfirmationData["kind"], string> = {
@@ -20,7 +23,12 @@ const KIND_EMOJI: Record<PostBookingConfirmationData["kind"], string> = {
   import: "📧",
 };
 
-export function PostBookingConfirmation({ data, onDismiss, onViewTrip }: PostBookingConfirmationProps) {
+export function PostBookingConfirmation({
+  data,
+  onDismiss,
+  onViewTrip,
+  onPlanCity,
+}: PostBookingConfirmationProps) {
   if (!data) return null;
 
   return (
@@ -49,6 +57,23 @@ export function PostBookingConfirmation({ data, onDismiss, onViewTrip }: PostBoo
             ) : null}
           </div>
         </div>
+        {data.planCityCities && data.planCityCities.length > 0 && onPlanCity ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {data.planCityCities.map((city) => (
+              <button
+                key={city}
+                type="button"
+                onClick={() => {
+                  onPlanCity(city);
+                  onDismiss();
+                }}
+                className="min-h-[48px] rounded-2xl border border-[#f4c95d]/50 px-4 py-2 text-sm font-bold text-[#f4c95d]"
+              >
+                Plan {city.split(",")[0]?.trim() ?? city}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="mt-5 flex flex-wrap gap-2">
           {onViewTrip ? (
           <button

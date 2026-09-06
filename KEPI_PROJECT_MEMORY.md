@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-08-22 (G45 typed fare + airport spotlight G46–G48 shipped)
+Last updated: 2026-09-06 (F20 Plan City belt shipped on preview branch)
+
+## Decision 2026-09-06 — Plan City belt (F20, Jeff BUILD)
+
+Pre-trip city day planner with provenance: pace filters catalog density only; Lecce lab catalog from OSM Nominatim refs + official tourism list (`src/data/planCity/lecce.catalog.json`); saves onto existing `itineraryPlans.dayPlans` bullets. Entry: Plan tab city cards, booking confirmation hook, Help “Plan a city day”. No LLM-invented stops; walk gaps OSM/OSRM only.
 
 ## Incident 2026-08-21 — Z84T4Z price stays in the drawer, ledger still says Add price (Jeff)
 
