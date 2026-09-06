@@ -351,7 +351,7 @@ export function MissionControlView({
     if (!snap.nextFlight) return null;
     const flight = snap.nextFlight;
     return resolveDayOfStatusChrome({
-      bookedStatus: flight.flightStatus ?? nextFlightLive?.bookedStatus,
+      bookedStatus: nextFlightLive?.bookedStatus,
       liveStatus: nextFlightLive?.flightStatus,
       liveCheckedAt: nextFlightLive?.checkedAt,
       liveError: nextFlightLive?.error,
@@ -998,7 +998,7 @@ export function MissionControlView({
               {formatFlightStatusTrustLine({
                 ...nextFlightLive,
                 bookedGate: snap.nextFlight.flightDepartureGate,
-                bookedStatus: snap.nextFlight.flightStatus,
+                bookedStatus: nextFlightLive?.bookedStatus,
                 departureIata: snap.nextFlight.flightDepartureAirport,
               })}
             </p>
