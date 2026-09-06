@@ -135,6 +135,10 @@ export function resolveTripWalk(input: {
   airportSpotlight?: HomeNextAction | null;
   /** F17 — stranded at airport after missed departure overrides spotlight. */
   strandedPrompt?: StrandedPrompt | null;
+  /** G49 — stay coach beats remaining-flight headline on mid-stay days. */
+  todayCoach?: HomeNextAction | null;
+  /** G51 — honest leave cue on stay days (checkout / train dep), not drive-time fallback. */
+  stayLeaveCue?: string | null;
 }): TripWalk {
   const stored =
     input.storedDepartureGate ?? input.nextFlight?.flightDepartureGate ?? null;
@@ -165,6 +169,7 @@ export function resolveTripWalk(input: {
     unresolvedReviewCount: input.unresolvedReviewCount,
     nextFlight: input.nextFlight,
     airportSpotlight: input.airportSpotlight,
+    todayCoach: input.todayCoach,
   });
 
   const strandedNext: HomeNextAction | null = input.strandedPrompt
@@ -231,7 +236,7 @@ export function resolveTripWalk(input: {
     phase,
     okay: { ok, line: okayLine },
     next,
-    leaveBy: input.leaveByHint ?? null,
+    leaveBy: input.stayLeaveCue ?? input.leaveByHint ?? null,
     canBreak: canBreak.slice(0, 3),
     gateChange,
   };
