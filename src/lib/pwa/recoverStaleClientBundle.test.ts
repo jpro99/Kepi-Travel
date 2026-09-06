@@ -102,7 +102,7 @@ test("I56: error page recovers a TDZ instead of remounting the same JS", () => {
   const src = readFileSync(join(process.cwd(), "src/app/error.tsx"), "utf8");
   assert.match(src, /isStaleBundleError\(error\)/);
   assert.match(src, /recoverStaleClientBundle/);
-  const sw = readFileSync(join(process.cwd(), "public/sw.js"), "utf8");
+  const sw = readFileSync(join(process.cwd(), "public/sw-src.js"), "utf8");
   assert.match(sw, /kepi-pwa-v40/);
   const layout = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8");
   assert.match(layout, /<DeployRefresh/);
@@ -111,7 +111,7 @@ test("I56: error page recovers a TDZ instead of remounting the same JS", () => {
 });
 
 test("I61: SW never caches failed static responses; DeployRefresh owns reload", () => {
-  const sw = readFileSync(join(process.cwd(), "public/sw.js"), "utf8");
+  const sw = readFileSync(join(process.cwd(), "public/sw-src.js"), "utf8");
   assert.match(sw, /function cacheIfOk/);
   assert.match(sw, /kepi-pwa-v40/);
   assert.match(sw, /never cache failed/i);
