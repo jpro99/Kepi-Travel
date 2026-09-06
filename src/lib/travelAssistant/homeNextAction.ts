@@ -43,6 +43,8 @@ export function pickHomeNextAction(input: {
   nextFlight?: MissionControlReservation | null;
   /** When set, replaces generic airport CTA with a specific spotlight line (G46). */
   airportSpotlight?: HomeNextAction | null;
+  /** G49 — active stay coach beats remaining-flight headline on mid-stay days. */
+  todayCoach?: HomeNextAction | null;
 }): HomeNextAction {
   if (input.airportSpotlight) {
     return input.airportSpotlight;
@@ -94,6 +96,10 @@ export function pickHomeNextAction(input: {
       ctaLabel: prep.href ? "Open official guidance" : "Open Plan",
       prepHref: prep.href,
     };
+  }
+
+  if (input.todayCoach) {
+    return input.todayCoach;
   }
 
   if (input.nextFlight?.id) {
