@@ -9,7 +9,6 @@ import {
   buildReservationQuickLinks,
   buildSourceEmailViewPath,
   reservationHasSourceEmail,
-  resolveBoardingPassUrl,
   type ReservationLinkInput,
 } from "@/lib/travelAssistant/reservationLinks";
 
@@ -96,50 +95,112 @@ function trainDetail(reservation: TrainTicketSourceReservation): string {
   return bits.join(" · ") || "Your booked train for today.";
 }
 
-/** Prefer stored pass URL, then ticket links, manage booking, then forwarded email/PDF. */
-export function resolveTrainTicketOpenTarget(
+function isStoredInAppUrl(url: string): boolean {
+  return url.trim().startsWith("/");
+}
+
+/** True when Kepi holds a ticket artifact (PDF, forwarded email, in-app pass URL). */
+export function reservationHasStoredTicketArtifact(
+  reservation: TrainTicketSourceReservation,
+  tripId?: string | null,
+): boolean {
+  const boardingPass = reservation.boardingPassUrl?.trim();
+  if (boardingPass && isOpenableTicketUrl(boardingPass) && isStoredInAppUrl(boardingPass)) {
+    return true;
+  }
+  if (
+    reservation.sourceLinks?.some(
+      (link) => link.kind === "ticket" && link.url?.trim() && isStoredInAppUrl(link.url),
+    )
+  ) {
+    return true;
+  }
+  if (tripId && reservationHasSourceEmail(reservation)) return true;
+  if (boardingPass && isOpenableTicketUrl(boardingPass)) return true;
+  return false;
+}
+
+/**
+ * Stored ticket artifacts first — in-app source-view / PDF / barcode before any provider lookup.
+ * Never invents Trenitalia deep links or barcodes.
+ */
+function resolveStoredTicketTarget(
   reservation: TrainTicketSourceReservation,
   tripId?: string | null,
 ): TrainTicketOpenTarget | null {
-  const passUrl = resolveBoardingPassUrl({
-    boardingPassUrl: reservation.boardingPassUrl,
-    sourceLinks: reservation.sourceLinks,
-    originalEmailText: reservation.originalEmailText,
-  });
-  if (passUrl && isOpenableTicketUrl(passUrl)) {
-    return { url: passUrl, label: "Train tickets", isExternal: !passUrl.startsWith("/") };
+  const boardingPass = reservation.boardingPassUrl?.trim();
+  if (boardingPass && isOpenableTicketUrl(boardingPass) && isStoredInAppUrl(boardingPass)) {
+    return { url: boardingPass, label: "Train tickets", isExternal: false };
   }
 
+  for (const link of reservation.sourceLinks ?? []) {
+    const url = link.url?.trim() ?? "";
+    if (link.kind === "ticket" && url && isStoredInAppUrl(url) && isOpenableTicketUrl(url)) {
+      return { url, label: "Train tickets", isExternal: false };
+    }
+  }
+
+  if (tripId && reservationHasSourceEmail(reservation)) {
+    return {
+      url: buildSourceEmailViewPath(tripId, reservation.id),
+      label: "Train tickets",
+      isExternal: false,
+    };
+  }
+
+  if (boardingPass && isOpenableTicketUrl(boardingPass)) {
+    return {
+      url: boardingPass,
+      label: "Train tickets",
+      isExternal: !isStoredInAppUrl(boardingPass),
+    };
+  }
+
+  return null;
+}
+
+/** External manage/ticket links only when no stored artifact exists on the reservation. */
+function resolveExternalTicketTarget(
+  reservation: TrainTicketSourceReservation,
+): TrainTicketOpenTarget | null {
   const manageUrl = reservation.manageUrl?.trim();
   if (manageUrl && isOpenableTicketUrl(manageUrl)) {
     return { url: manageUrl, label: "Train tickets", isExternal: true };
   }
 
   for (const link of reservation.sourceLinks ?? []) {
-    if ((link.kind === "ticket" || link.kind === "manage") && isOpenableTicketUrl(link.url)) {
-      return { url: link.url, label: "Train tickets", isExternal: !link.url.startsWith("/") };
+    const url = link.url?.trim() ?? "";
+    if (
+      (link.kind === "ticket" || link.kind === "manage") &&
+      url &&
+      !isStoredInAppUrl(url) &&
+      isOpenableTicketUrl(url)
+    ) {
+      return { url, label: "Train tickets", isExternal: true };
     }
   }
 
   const quickLinks = buildReservationQuickLinks(reservation);
   const quickTicket = quickLinks.find((link) => link.kind === "ticket" || link.kind === "manage");
-  if (quickTicket && isOpenableTicketUrl(quickTicket.url)) {
+  if (quickTicket?.url && isOpenableTicketUrl(quickTicket.url)) {
     return {
       url: quickTicket.url,
       label: "Train tickets",
-      isExternal: !quickTicket.url.startsWith("/"),
-    };
-  }
-
-  if (tripId && reservationHasSourceEmail(reservation)) {
-    return {
-      url: buildSourceEmailViewPath(tripId, reservation.id),
-      label: reservation.hasPdfAttachment ? "Train tickets" : "Train tickets",
-      isExternal: false,
+      isExternal: !isStoredInAppUrl(quickTicket.url),
     };
   }
 
   return null;
+}
+
+/** Prefer stored in-app artifact, then external manage/ticket URL when nothing is stored. */
+export function resolveTrainTicketOpenTarget(
+  reservation: TrainTicketSourceReservation,
+  tripId?: string | null,
+): TrainTicketOpenTarget | null {
+  const stored = resolveStoredTicketTarget(reservation, tripId);
+  if (stored) return stored;
+  return resolveExternalTicketTarget(reservation);
 }
 
 export function buildTrainTicketHandoffContent(
@@ -151,10 +212,14 @@ export function buildTrainTicketHandoffContent(
   if (!target) return null;
 
   const honestyNote = target.isExternal
-    ? "Kepi opens your stored ticket or booking link — we do not generate rail barcodes."
+    ? target.url === reservation.manageUrl?.trim()
+      ? "Opens your booking provider — we do not generate rail barcodes."
+      : "Opens your stored booking link — we do not generate rail barcodes."
     : reservation.hasPdfAttachment
-      ? "Opens your forwarded confirmation email and PDF attachment."
-      : "Opens your forwarded confirmation email.";
+      ? "Opens your stored ticket PDF or forwarded confirmation in Kepi."
+      : reservation.boardingPassUrl?.trim()
+        ? "Opens your stored boarding pass."
+        : "Opens your forwarded confirmation in Kepi.";
 
   return {
     reservationId: reservation.id,
