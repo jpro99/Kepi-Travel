@@ -251,6 +251,11 @@ Schedule-airborne windows may show **In the air** and the booked route (e.g. ONT
 
 **Test:** `src/lib/travelAssistant/airborneLiveClaim.test.ts`
 
+**F17 — Stranded-at-airport + day-of door honesty (disruption belt)**  
+When booked departure has passed and coarse GPS still shows `at-airport` or `in-terminal` at that IATA (no airborne/live-enroute claim), Home must ask whether the traveler missed the flight or was denied boarding/rebooked — never assume they departed. EC 261 coach cites Regulation (EC) No 261/2004 on EUR-Lex only (Article 7 bands €250/€400/€600); Kepi coaches, does not file. Day-of doors use provenance `SCHEDULED_ITINERARY` | `AIRPORT_FIDS_TEXT` | `ALERT_PUSH_STRING` | `UNVERIFIED` — `UNVERIFIED` hides departure countdown; gate is STRING overlay only; bags/clubs from package Facts or honest unknown + official airport link. Rebook ingest clears stranded when the reservation departure moves forward.
+
+**Test:** `src/lib/travelAssistant/strandedFlightDetector.test.ts`, `src/lib/travelAssistant/ec261Coach.test.ts`, `src/lib/travelAssistant/dayOfDoorProvenance.test.ts`, `src/lib/travelAssistant/strandedRebookIngest.test.ts`
+
 **F15 — Next flight is earliest remaining departure, not storage order**  
 Home, Airport Mode, Book → Flights, and check-in handoff must pick the chronologically next booked segment (timezone-aware departure clock), including domestic connectors. Storage array order and long-haul role never override clock time — ONT→SEA before SEA→FCO on the same travel day. When `localTime` and `flightDepartureTime` disagree on the same day, use the later booked clock for sorting (live status may pull `localTime` earlier; delay updates push it later). Departure UTC conversion must use the **departure-airport IATA timezone**, not stored `flight.timezone` when it bleeds (e.g. `Europe/Rome` on a SEA departure would sort as 8:30 AM Pacific). Home TODAY uses `selectNextRemainingFlight` + `getLeaveByHint` on that pick — not a separate travel-day picker; leave-by labels render in departure-airport local time.
 

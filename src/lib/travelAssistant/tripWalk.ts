@@ -15,6 +15,7 @@ import type {
   MissionControlReservation,
   ReadinessStatus,
 } from "@/lib/travelAssistant/tripPhase";
+import type { StrandedPrompt } from "@/lib/travelAssistant/strandedFlightDetector";
 
 export type TripWalkPhase =
   | "prep"
@@ -132,6 +133,8 @@ export function resolveTripWalk(input: {
   tripStatus?: ReadinessStatus;
   /** G46 — specific airport line replaces generic Open Airport Mode. */
   airportSpotlight?: HomeNextAction | null;
+  /** F17 — stranded at airport after missed departure overrides spotlight. */
+  strandedPrompt?: StrandedPrompt | null;
 }): TripWalk {
   const stored =
     input.storedDepartureGate ?? input.nextFlight?.flightDepartureGate ?? null;
@@ -149,7 +152,7 @@ export function resolveTripWalk(input: {
     atAirport: input.atAirport,
     prepMode: input.prepMode,
     leaveByHint: input.leaveByHint,
-    hasDisruptionAttention,
+    hasDisruptionAttention: hasDisruptionAttention || Boolean(input.strandedPrompt),
     gateChange,
   });
 
@@ -164,7 +167,20 @@ export function resolveTripWalk(input: {
     airportSpotlight: input.airportSpotlight,
   });
 
-  const next = gateChange && !input.prepMode ? gateChangeNext(gateChange) : baseNext;
+  const strandedNext: HomeNextAction | null = input.strandedPrompt
+    ? {
+        kind: "attention",
+        eyebrow: "Disruption",
+        title: input.strandedPrompt.headline,
+        detail: input.strandedPrompt.subline,
+        ctaLabel: "Tell Kepi what happened",
+        reservationId: input.strandedPrompt.reservationId,
+      }
+    : null;
+
+  const next =
+    strandedNext ??
+    (gateChange && !input.prepMode ? gateChangeNext(gateChange) : baseNext);
 
   const canBreak: TripWalkBreak[] = [];
   if (gateChange) {
