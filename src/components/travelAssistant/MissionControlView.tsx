@@ -319,14 +319,11 @@ export function MissionControlView({
     if (!snap.nextFlight || journeyPhase?.kind === "airborne") {
       return { shouldPrompt: false, prompt: null as ReturnType<typeof detectStrandedAtAirport>["prompt"] };
     }
-    const airborneThis =
-      journeyPhase?.kind === "airborne" &&
-      journeyPhase.onFlight.id === snap.nextFlight.id;
     const liveEnRoute = hasVerifiedLiveAirborneStatus(nextFlightLive);
     return detectStrandedAtAirport({
       flight: snap.nextFlight,
       locationStatus: locationStatus === "airborne" ? "away" : locationStatus,
-      journeyAirborneForThisFlight: airborneThis,
+      journeyAirborneForThisFlight: false,
       liveEnRoute,
       existingState: effectiveStranded,
     });
