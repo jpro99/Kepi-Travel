@@ -10513,6 +10513,7 @@ export default function TravelAssistantPage() {
               </section>
             ) : (
               <DesktopTripHomeView
+                tripId={activeTripId}
                 tripName={activeTrip?.name ?? tApp("defaultTripName")}
                 destination={consumerTripDestination ?? activeTrip?.destination ?? null}
                 startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}

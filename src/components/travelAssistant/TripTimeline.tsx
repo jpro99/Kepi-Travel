@@ -15,6 +15,8 @@ import { reservationMissingPrice } from "@/lib/travelAssistant/tripSpendSummary"
 import { ReservationQuickLinks } from "@/components/travelAssistant/ReservationQuickLinks";
 import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthroughBlock";
 import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
+import { TrainTicketHandoffCard } from "@/components/travelAssistant/TrainTicketHandoffCard";
+import { resolveTrainTicketsForDay } from "@/lib/travelAssistant/trainTicketHandoff";
 import type { ReservationLinkInput } from "@/lib/travelAssistant/reservationLinks";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
 
@@ -393,6 +395,7 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayT
     tripStartDate,
     tripEndDate,
   });
+  const trainTicketHandoffs = resolveTrainTicketsForDay(allReservations, day.key, tripId);
 
   return (
     <div className={`relative flex gap-0 transition-opacity ${past && dimPast && !showPastConfirmed ? "opacity-50" : past && dimPast ? "opacity-75" : ""}`}>
@@ -437,6 +440,13 @@ function DayRow({ day, onReservationTap, showPastConfirmed, dimPast, onEmptyDayT
 
         {hasEvents && expanded ? (
           <div className="mt-3 space-y-3">
+            {trainTicketHandoffs.length > 0 ? (
+              <div className="space-y-2">
+                {trainTicketHandoffs.map((handoff) => (
+                  <TrainTicketHandoffCard key={handoff.reservationId} content={handoff} />
+                ))}
+              </div>
+            ) : null}
             <DayWalkthroughBlock
               walkthrough={walkthrough}
               headlineClassName="text-sm font-bold text-[var(--text-primary)]"

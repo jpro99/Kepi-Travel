@@ -303,6 +303,7 @@ export function MobileMapForwardShell({
       <div className="kepi-mobile-shell kepi-mobile-tab-pad space-y-4">
         <MissionControlView
           tripName={tripName}
+          tripId={tripId}
           destination={destination}
           startDate={startDate}
           endDate={endDate}

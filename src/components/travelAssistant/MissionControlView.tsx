@@ -13,6 +13,12 @@ import { reservationPropertyName } from "@/lib/travelAssistant/reservationDispla
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { CheckInHandoffContent } from "@/lib/travelAssistant/checkInHandoff";
 import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffCard";
+import { TrainTicketHandoffCard } from "@/components/travelAssistant/TrainTicketHandoffCard";
+import {
+  resolveTodayTrainTicketHandoffs,
+  resolveTrainTicketsForDay,
+  type TrainTicketSourceReservation,
+} from "@/lib/travelAssistant/trainTicketHandoff";
 import {
   buildConnectionCalmStatus,
   buildHomePrepWatchItems,
@@ -60,6 +66,7 @@ export interface MissionControlViewProps {
   /** Journey phase for travel-day takeover (airborne / just-landed). */
   journeyPhase?: JourneyPhase;
   checkInHandoff?: CheckInHandoffContent | null;
+  tripId?: string | null;
   locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
   /** Soft Free→Pro clarity (I41). Hidden when Pro/lifetime. */
   showFreePlanNudge?: boolean;
@@ -140,6 +147,7 @@ export function MissionControlView({
   hasActiveTrip = true,
   journeyPhase,
   checkInHandoff = null,
+  tripId = null,
   locationStatus = "unknown",
   showFreePlanNudge = false,
   onSeeProPlans,
@@ -161,6 +169,16 @@ export function MissionControlView({
   onOpenReadiness,
 }: MissionControlViewProps) {
   const passportComplete = readinessChecklist.find((item) => item.id === "ready-passport")?.complete ?? false;
+
+  const trainTicketHandoffs = useMemo(
+    () =>
+      resolveTodayTrainTicketHandoffs(
+        reservations as TrainTicketSourceReservation[],
+        Date.now(),
+        tripId,
+      ),
+    [reservations, tripId],
+  );
 
   const snap = useMemo(
     () =>
@@ -429,6 +447,14 @@ export function MissionControlView({
 
         {checkInHandoff && journeyPhase?.kind !== "airborne" ? (
           <CheckInHandoffCard content={checkInHandoff} />
+        ) : null}
+
+        {trainTicketHandoffs.length > 0 ? (
+          <div className="space-y-2">
+            {trainTicketHandoffs.map((handoff) => (
+              <TrainTicketHandoffCard key={handoff.reservationId} content={handoff} />
+            ))}
+          </div>
         ) : null}
 
         <button
@@ -872,6 +898,14 @@ export function MissionControlView({
 
       {checkInHandoff ? <CheckInHandoffCard content={checkInHandoff} /> : null}
 
+      {zoom === "today" && trainTicketHandoffs.length > 0 ? (
+        <div className="space-y-2">
+          {trainTicketHandoffs.map((handoff) => (
+            <TrainTicketHandoffCard key={handoff.reservationId} content={handoff} />
+          ))}
+        </div>
+      ) : null}
+
       {snap.tonightHotel && (snap.phase === "at_destination" || snap.phase === "departure_day") ? (
         <article className="rounded-2xl bg-[#F5F5F7] p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
@@ -901,6 +935,8 @@ export function MissionControlView({
       {selectedDay ? (
         <DayDetailSheet
           day={selectedDay}
+          tripId={tripId}
+          reservations={reservations as TrainTicketSourceReservation[]}
           onClose={() => setSelectedDay(null)}
           onOpenPlan={onOpenPlan}
           onReservationTap={onReservationTap}
@@ -927,17 +963,23 @@ function weekSummary(days: DayReadiness[]): string {
 
 function DayDetailSheet({
   day,
+  tripId,
+  reservations,
   onClose,
   onOpenPlan,
   onReservationTap,
   onGapActionTap,
 }: {
   day: DayReadiness;
+  tripId?: string | null;
+  reservations: TrainTicketSourceReservation[];
   onClose: () => void;
   onOpenPlan: () => void;
   onReservationTap?: (id: string) => void;
   onGapActionTap?: (action: TripGapNavigationAction) => void;
 }) {
+  const trainTicketHandoffs = resolveTrainTicketsForDay(reservations, day.dateKey, tripId);
+
   return (
     <div className="fixed inset-0 z-[120] flex items-end bg-black/40 sm:items-center sm:justify-center sm:p-6">
       <div className="max-h-[88dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 sm:max-w-lg sm:rounded-3xl">
@@ -998,6 +1040,14 @@ function DayDetailSheet({
                 </li>
               ))}
             </ul>
+          </section>
+        ) : null}
+
+        {trainTicketHandoffs.length > 0 ? (
+          <section className="mt-4 space-y-2">
+            {trainTicketHandoffs.map((handoff) => (
+              <TrainTicketHandoffCard key={handoff.reservationId} content={handoff} />
+            ))}
           </section>
         ) : null}
 

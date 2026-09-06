@@ -46,6 +46,7 @@ interface TripReservation {
 
 interface DesktopTripHomeViewProps {
   tripName: string;
+  tripId?: string | null;
   destination?: string | null;
   startDate?: string | null;
   endDate?: string | null;
@@ -97,6 +98,7 @@ interface DesktopTripHomeViewProps {
 
 export function DesktopTripHomeView({
   tripName,
+  tripId = null,
   destination,
   startDate,
   endDate,
@@ -158,6 +160,7 @@ export function DesktopTripHomeView({
     <section className="mx-auto max-w-2xl space-y-5 px-1">
       <MissionControlView
         tripName={tripName}
+        tripId={tripId}
         destination={destination}
         startDate={startDate}
         endDate={endDate}
