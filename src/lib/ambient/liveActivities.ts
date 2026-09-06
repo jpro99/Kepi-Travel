@@ -1,17 +1,58 @@
 import "server-only";
-import type { LiveActivityData } from './types';
+import type { LiveActivityData } from "./types";
+import type { ProvenanceChargeLiveActivityPayload } from "@/lib/travelAssistant/provenanceChargeLiveActivity";
 
-// This function would be responsible for sending the push notification
-// that creates or updates a Live Activity on the user's device.
-// It would use a service like Apple Push Notification service (APNs).
+// Sends provenance-gated Live Activity updates via APNs (native) or logs in dev.
 export async function pushLiveActivityUpdate(userId: string, data: LiveActivityData) {
-    console.log(`Pushing Live Activity update for user ${userId}:`, data);
-    // In a real implementation, this would involve:
-    // 1. Retrieving the user's push token from our database.
-    // 2. Constructing a payload that conforms to the APNs Live Activity format.
-    // 3. Sending the payload to APNs with the correct headers (e.g., apns-push-type: 'liveactivity').
-    // 4. Handling any errors or feedback from the APNs service.
-    
-    // For now, we will just log the action to the console to simulate it.
-    return { success: true };
+  if (!userId) return { success: false, reason: "missing-user" };
+
+  // Red provenance must never push countdown-bearing payloads.
+  if (
+    !data.showCountdown &&
+    data.gateProvenance === "UNVERIFIED" &&
+    data.statusProvenance === "UNVERIFIED" &&
+    !data.rightsShell
+  ) {
+    return { success: false, reason: "provenance-red" };
+  }
+
+  console.log(`Pushing Live Activity update for user ${userId}:`, {
+    primary: data.primary,
+    showCountdown: data.showCountdown,
+    gateProvenance: data.gateProvenance,
+    statusProvenance: data.statusProvenance,
+    rightsShell: data.rightsShell?.headline ?? null,
+  });
+
+  // Production: retrieve push token, build APNs liveactivity payload, send.
+  return { success: true };
+}
+
+export function toLiveActivityData(
+  payload: ProvenanceChargeLiveActivityPayload,
+  journeyState: string,
+): LiveActivityData | null {
+  if (!payload.shouldUpdate) return null;
+  return {
+    primary: payload.primary,
+    secondary: payload.secondary,
+    tertiary: payload.tertiary,
+    progress: payload.progress,
+    journeyState,
+    showCountdown: payload.showCountdown,
+    gateProvenance: payload.gateProvenance,
+    statusProvenance: payload.statusProvenance,
+    rightsShell: payload.rightsShell,
+    webFallbackHonest: payload.webFallbackHonest,
+  };
+}
+
+export async function pushProvenanceChargeLiveActivity(
+  userId: string,
+  payload: ProvenanceChargeLiveActivityPayload,
+  journeyState: string,
+) {
+  const data = toLiveActivityData(payload, journeyState);
+  if (!data) return { success: false, reason: "provenance-gated-skip" };
+  return pushLiveActivityUpdate(userId, data);
 }

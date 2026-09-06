@@ -1,5 +1,7 @@
 "use client";
 
+import { evaluateGateCorroboration } from "@/lib/airportNav/gateHarvestCorroboration";
+import { normalizeVisionGateExtract } from "@/lib/airportNav/gateVisionExtract";
 import { buildTravelerCaptureRecord } from "@/lib/airportNav/travelerCapture";
 import {
   countPendingOutboxCaptures,
@@ -101,11 +103,26 @@ export async function syncPendingTravelerCaptures(): Promise<number> {
   return synced;
 }
 
+export interface TravelerCaptureEnqueueInput extends TravelerCaptureSubmitInput {
+  visionText?: string | null;
+  visionConfidence?: number | null;
+}
+
 export async function enqueueTravelerCapture(
-  input: TravelerCaptureSubmitInput,
+  input: TravelerCaptureEnqueueInput,
 ): Promise<TravelerCaptureRecord> {
-  const opId = input.id?.trim() || generateId();
-  const photoDataUrl = input.photoDataUrl?.trim() || null;
+  const vision = normalizeVisionGateExtract({
+    text: input.visionText,
+    confidence: input.visionConfidence,
+    source: "vision",
+  });
+  const mergedInput: TravelerCaptureSubmitInput = {
+    ...input,
+    gateString: input.gateString ?? vision.gateString,
+  };
+
+  const opId = mergedInput.id?.trim() || generateId();
+  const photoDataUrl = mergedInput.photoDataUrl?.trim() || null;
   let hasLocalPhoto = false;
   if (photoDataUrl) {
     const photoResult = await saveCapturePhoto(opId, photoDataUrl);
@@ -113,7 +130,7 @@ export async function enqueueTravelerCapture(
   }
 
   const record = buildTravelerCaptureRecord(
-    { ...input, id: opId },
+    { ...mergedInput, id: opId },
     { syncStatus: "pending", hasLocalPhoto },
   );
   await upsertOutboxCapture(record);
@@ -122,11 +139,20 @@ export async function enqueueTravelerCapture(
 
 /** Commit locally first, then best-effort sync when online. */
 export async function saveTravelerCapture(
-  input: TravelerCaptureSubmitInput,
+  input: TravelerCaptureEnqueueInput,
 ): Promise<{ record: TravelerCaptureRecord; synced: boolean }> {
   const record = await enqueueTravelerCapture(input);
   const syncedCount = await syncPendingTravelerCaptures();
   return { record, synced: syncedCount > 0 };
+}
+
+/** F19 corroboration over durable outbox — same-user re-pass OK for v1. */
+export async function evaluateOutboxCorroboration(
+  tripId: string,
+  options?: { officialGateString?: string | null; iata?: string },
+) {
+  const captures = await listOutboxCaptures(tripId);
+  return evaluateGateCorroboration(captures, options);
 }
 
 /** Sync peek for Help Facts — call listLocalTravelerCaptures() once on mount to hydrate cache. */

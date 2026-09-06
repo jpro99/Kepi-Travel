@@ -1,18 +1,23 @@
-// This interface defines the data structure for a Live Activity update.
-// It is designed to be sent via a push notification to an iOS device.
+// Live Activity / Dynamic Island payload — provenance-gated (Breakthrough A).
+
+import type { FlightFactProvenance } from "@/lib/travelAssistant/dayOfDoorProvenance";
+import type { UndyingRightsShell } from "@/lib/travelAssistant/provenanceChargeLiveActivity";
+
 export interface LiveActivityData {
-  // The primary, most important piece of information (e.g., "Gate C27").
+  /** Primary line (e.g. gate STRING). */
   primary: string;
-
-  // Secondary information (e.g., "Boarding in 15 min").
+  /** Secondary (countdown or status). */
   secondary: string;
-
-  // A tertiary piece of info, often a status (e.g., "On Time").
+  /** Tertiary status or rights headline. */
   tertiary: string;
-
-  // A value from 0.0 to 1.0 to drive a progress bar (e.g., time to boarding).
-  progress: number;
-
-  // The current journey state, to determine the icon to display.
+  /** 0–1 progress when countdown is green; null otherwise. */
+  progress: number | null;
   journeyState: string;
+  /** Whether Dynamic Island may show departure countdown. */
+  showCountdown: boolean;
+  gateProvenance: FlightFactProvenance;
+  statusProvenance: FlightFactProvenance;
+  /** Cached EC261 coach shell — survives Home freeze. */
+  rightsShell: UndyingRightsShell | null;
+  webFallbackHonest: string;
 }
