@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   resolveSnapshotApplyOptions,
+  shouldRunForegroundSoftRefresh,
   shouldShowTripShellSkeleton,
 } from "@/lib/travelAssistant/softTripRefresh";
 
@@ -30,4 +31,19 @@ test("initial load is not silent and marks hydrated", () => {
   const options = resolveSnapshotApplyOptions({ background: false, tripsHydrated: false });
   assert.equal(options.silent, false);
   assert.equal(options.markHydrated, true);
+});
+
+test("foreground soft refresh skips hidden tab and offline", () => {
+  assert.equal(
+    shouldRunForegroundSoftRefresh({ online: true, visibilityState: "visible" }),
+    true,
+  );
+  assert.equal(
+    shouldRunForegroundSoftRefresh({ online: true, visibilityState: "hidden" }),
+    false,
+  );
+  assert.equal(
+    shouldRunForegroundSoftRefresh({ online: false, visibilityState: "visible" }),
+    false,
+  );
 });

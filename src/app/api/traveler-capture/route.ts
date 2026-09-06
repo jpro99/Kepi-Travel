@@ -22,6 +22,8 @@ const MapMarkSchema = z.object({
   pinNote: z.string().trim().max(200).nullable().optional(),
 });
 
+const MAX_PHOTO_DATA_URL = 320_000;
+
 const PostSchema = z.object({
   id: z.string().trim().max(80).optional(),
   tripId: z.string().trim().min(1).max(120),
@@ -31,6 +33,13 @@ const PostSchema = z.object({
   mapMark: MapMarkSchema.nullable().optional(),
   note: z.string().trim().max(500).nullable().optional(),
   capturedAt: z.string().trim().max(40).optional(),
+  photoDataUrl: z
+    .string()
+    .trim()
+    .max(MAX_PHOTO_DATA_URL)
+    .refine((value) => !value || value.startsWith("data:image/"), "photo must be image data URL")
+    .nullable()
+    .optional(),
 });
 
 export async function GET(req: Request) {
@@ -92,8 +101,9 @@ export async function POST(req: Request) {
       note: validated.note,
       mapMark: validated.mapMark,
       capturedAt: parsed.data.capturedAt,
+      photoDataUrl: parsed.data.photoDataUrl,
     },
-    { syncStatus: "synced" },
+    { syncStatus: "synced", hasLocalPhoto: Boolean(parsed.data.photoDataUrl?.trim()) },
   );
   if (parsed.data.id?.trim()) {
     record.id = parsed.data.id.trim();

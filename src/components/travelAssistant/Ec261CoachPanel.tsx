@@ -3,6 +3,7 @@
 import {
   buildEc261CoachContent,
   EC261_REGULATION_URL,
+  EC261_YOUR_EUROPE_URL,
   type Ec261CompensationBand,
 } from "@/lib/travelAssistant/ec261Coach";
 import type { StrandedDisruptionReason } from "@/lib/travelAssistant/strandedFlightDetector";
@@ -63,6 +64,34 @@ export function Ec261CoachPanel({
         </p>
       </section>
 
+      <section className="mt-4">
+        <h4 className="text-[14px] font-semibold text-[#1D1D1F] dark:text-white">Checklist</h4>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-[14px] leading-relaxed text-[#6E6E73] dark:text-[#AEAEB2]">
+          {coach.checklist.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ol>
+      </section>
+
+      {coach.reformNotice ? (
+        <section className="mt-4 rounded-xl border border-[#007AFF]/20 bg-white/70 px-3 py-3 dark:bg-white/5">
+          <p className="text-[12px] font-bold uppercase tracking-wide text-[#007AFF]">
+            Reform update ({coach.reformNotice.statusAsOf})
+          </p>
+          <p className="mt-1 text-[13px] leading-relaxed text-[#6E6E73] dark:text-[#AEAEB2]">
+            {coach.reformNotice.summary}
+          </p>
+          <a
+            href={coach.reformNotice.officialUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block min-h-[44px] text-[14px] font-semibold text-[#007AFF]"
+          >
+            European Parliament press release →
+          </a>
+        </section>
+      ) : null}
+
       {coach.eligible ? (
         <section className="mt-4">
           <h4 className="text-[14px] font-semibold text-[#1D1D1F] dark:text-white">
@@ -80,6 +109,14 @@ export function Ec261CoachPanel({
             className="mt-2 inline-block min-h-[44px] text-[14px] font-semibold text-[#007AFF]"
           >
             Read Regulation (EC) No 261/2004 on EUR-Lex →
+          </a>
+          <a
+            href={EC261_YOUR_EUROPE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-block min-h-[44px] text-[14px] font-semibold text-[#007AFF]"
+          >
+            Your Europe overview →
           </a>
         </section>
       ) : null}
