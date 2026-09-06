@@ -1122,7 +1122,6 @@ export function LiveMapPage() {
               shellTopInset={AIRPORT_MAP_INNER_TOP_INSET}
               tripReservations={tripReservations}
               activeReservationId={navFlight.f.id}
-              tripId={activeTripId}
             />
             {airportLiveMode && members.length >= 2 ? (
               <div

@@ -293,20 +293,6 @@ import {
   resolveSnapshotApplyOptions,
   shouldShowTripShellSkeleton,
 } from "@/lib/travelAssistant/softTripRefresh";
-import {
-  formatTravelerObservedGateLine,
-  indexTravelerObservedGates,
-} from "@/lib/airportNav/airportCapture";
-import {
-  installAirportCaptureSync,
-  listLocalAirportCaptures,
-} from "@/lib/airportNav/airportCaptureQueue";
-import { formatTravelerObservedFactsString } from "@/lib/airportNav/airportCaptureFacts";
-import {
-  getPersistedCaptureTripId,
-  persistCaptureTripId,
-} from "@/lib/airportNav/airportCaptureSession";
-import { AirportCaptureMode } from "@/components/travelAssistant/AirportCaptureMode";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import {
   formatCalendarSyncSummary,
@@ -1835,7 +1821,6 @@ export default function TravelAssistantPage() {
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [tripsLoading, setTripsLoading] = useState(true);
   const [tripsHydrated, setTripsHydrated] = useState(false);
-  const [airportCaptureTick, setAirportCaptureTick] = useState(0);
   const [upgradeModalGate, setUpgradeModalGate] = useState<UpgradeModalGateContext | null>(null);
   const [highlightedReservationId, setHighlightedReservationId] = useState<string | null>(null);
   const [tripStage, setTripStage] = useState<TripStage>("readiness");
@@ -5276,36 +5261,6 @@ export default function TravelAssistantPage() {
     [consumerReservationsSorted, consumerTripDestination, activeTrip?.destination],
   );
 
-  useEffect(() => {
-    return installAirportCaptureSync(() => {
-      setAirportCaptureTick((value) => value + 1);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (activeTripId) persistCaptureTripId(activeTripId);
-  }, [activeTripId]);
-
-  const travelerObservedGateLine = useMemo(() => {
-    const tripId =
-      activeTripId ?? getPersistedCaptureTripId() ?? searchParams.get("tripId")?.trim() ?? null;
-    if (!tripId) return null;
-    const nextFlight = selectNextRemainingFlight(consumerReservationsSorted, Date.now());
-    if (!nextFlight?.id) return null;
-    const captures = listLocalAirportCaptures(tripId);
-    const indexed = indexTravelerObservedGates(captures);
-    return formatTravelerObservedGateLine(indexed[nextFlight.id] ?? null);
-  }, [activeTripId, airportCaptureTick, consumerReservationsSorted, searchParams]);
-
-  const travelerObservedFactsLine = useMemo(() => {
-    const tripId =
-      activeTripId ?? getPersistedCaptureTripId() ?? searchParams.get("tripId")?.trim() ?? null;
-    if (!tripId) return null;
-    const captures = listLocalAirportCaptures(tripId);
-    const latest = captures[0] ?? null;
-    return formatTravelerObservedFactsString(latest);
-  }, [activeTripId, airportCaptureTick, searchParams]);
-
   const showTripShellSkeleton = shouldShowTripShellSkeleton({
     tripsInitialLoading: tripsLoading,
     tripsHydrated,
@@ -5344,7 +5299,6 @@ export default function TravelAssistantPage() {
           notes: reservation.notes,
         })),
       ),
-      travelerObservedFacts: travelerObservedFactsLine,
     });
   }, [
     activeTrip?.destination,
@@ -5354,7 +5308,6 @@ export default function TravelAssistantPage() {
     consumerTripDestination,
     guidanceLocationStatus,
     journeyPhase.kind,
-    travelerObservedFactsLine,
   ]);
 
   useEffect(() => {
@@ -10517,7 +10470,6 @@ export default function TravelAssistantPage() {
                 onOpenReview={handleOpenConsumerReviewQueue}
                 readinessChecklist={readinessChecklistForHome}
                 onOpenReadiness={openReadinessChecklistInMoreTab}
-                travelerObservedGateLine={travelerObservedGateLine}
                 readinessItems={readinessItems}
                 onToggleReadinessItem={handleChecklistToggle}
                 readinessChecklistSectionRef={readinessChecklistSectionRef}
@@ -10685,7 +10637,6 @@ export default function TravelAssistantPage() {
                 readinessChecklist={readinessChecklistForHome}
                 onOpenReadiness={openReadinessChecklistInMoreTab}
                 travelerType={neuroTravelerType}
-                travelerObservedGateLine={travelerObservedGateLine}
               />
             )
           ) : consumerTab === "itinerary" ? (
@@ -12260,16 +12211,6 @@ export default function TravelAssistantPage() {
       {!tripsLoading && trips.length === 0 ? (
         <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
       ) : null}
-      <AirportCaptureMode
-        locationStatus={guidanceLocationStatus}
-        nearestAirport={guidanceNearestAirport}
-        plannableIata={findPlannableAirportIata(consumerReservationsSorted)}
-        activeTripId={activeTripId}
-        urlTripId={searchParams.get("tripId")}
-        reservationId={nextUpcomingFlight?.id ?? null}
-        userLat={guidanceUserLat}
-        userLon={guidanceUserLon}
-      />
     </main>
   );
 }
