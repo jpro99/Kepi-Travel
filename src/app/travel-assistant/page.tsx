@@ -293,6 +293,16 @@ import {
   resolveSnapshotApplyOptions,
   shouldShowTripShellSkeleton,
 } from "@/lib/travelAssistant/softTripRefresh";
+import { formatTravelerCaptureFactsLine } from "@/lib/airportNav/travelerCapture";
+import {
+  listLocalTravelerCaptures,
+  syncPendingTravelerCaptures,
+} from "@/lib/airportNav/travelerCaptureLocal";
+import {
+  getPersistedCaptureTripId,
+  persistCaptureTripId,
+} from "@/lib/airportNav/travelerCaptureSession";
+import { AirportTravelerCapture } from "@/components/travelAssistant/AirportTravelerCapture";
 import { ConciergePanel } from "@/components/travelAssistant/ConciergePanel";
 import {
   formatCalendarSyncSummary,
@@ -1821,6 +1831,7 @@ export default function TravelAssistantPage() {
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [tripsLoading, setTripsLoading] = useState(true);
   const [tripsHydrated, setTripsHydrated] = useState(false);
+  const [travelerCaptureTick, setTravelerCaptureTick] = useState(0);
   const [upgradeModalGate, setUpgradeModalGate] = useState<UpgradeModalGateContext | null>(null);
   const [highlightedReservationId, setHighlightedReservationId] = useState<string | null>(null);
   const [tripStage, setTripStage] = useState<TripStage>("readiness");
@@ -3182,6 +3193,9 @@ export default function TravelAssistantPage() {
       void refreshTripsFromServer({ background: true }).catch(() => {
         // Background polling should fail silently and retry on next interval.
       });
+      void syncPendingTravelerCaptures().then((count) => {
+        if (count > 0) setTravelerCaptureTick((value) => value + 1);
+      });
     };
     timer = window.setInterval(pollTrips, 120_000);
     const handleVisibilityChange = () => {
@@ -3189,12 +3203,15 @@ export default function TravelAssistantPage() {
         pollTrips();
       }
     };
+    const handleOnline = () => pollTrips();
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
     return () => {
       if (timer) {
         window.clearInterval(timer);
       }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
     };
   }, [refreshTripsFromServer]);
 
@@ -5267,6 +5284,18 @@ export default function TravelAssistantPage() {
   });
 
   useEffect(() => {
+    if (activeTripId) persistCaptureTripId(activeTripId);
+  }, [activeTripId]);
+
+  const travelerCaptureFactsLine = useMemo(() => {
+    const tripId =
+      activeTripId ?? getPersistedCaptureTripId() ?? searchParams.get("tripId")?.trim() ?? null;
+    if (!tripId) return null;
+    const captures = listLocalTravelerCaptures(tripId);
+    return formatTravelerCaptureFactsLine(captures[0] ?? null);
+  }, [activeTripId, travelerCaptureTick, searchParams]);
+
+  useEffect(() => {
     if (!activeTripId) return;
     const todayKey = new Date().toISOString().slice(0, 10);
     setSupportLiveContext({
@@ -5299,6 +5328,7 @@ export default function TravelAssistantPage() {
           notes: reservation.notes,
         })),
       ),
+      travelerObservedFacts: travelerCaptureFactsLine,
     });
   }, [
     activeTrip?.destination,
@@ -5308,6 +5338,7 @@ export default function TravelAssistantPage() {
     consumerTripDestination,
     guidanceLocationStatus,
     journeyPhase.kind,
+    travelerCaptureFactsLine,
   ]);
 
   useEffect(() => {
@@ -5858,6 +5889,9 @@ export default function TravelAssistantPage() {
     }
     const appliedFromQueue = drainQueuedProviderUpdates(true, "manual sync");
     const replayedActions = replayPendingOutbox("manual sync");
+    void syncPendingTravelerCaptures().then((count) => {
+      if (count > 0) setTravelerCaptureTick((value) => value + 1);
+    });
     setLastSyncAt(new Date().toISOString());
     setToast(
       appliedFromQueue > 0 || replayedActions > 0
@@ -12211,6 +12245,17 @@ export default function TravelAssistantPage() {
       {!tripsLoading && trips.length === 0 ? (
         <OnboardingFlow onCreateFirstTrip={handleCreateOnboardingTrip} />
       ) : null}
+      <AirportTravelerCapture
+        locationStatus={guidanceLocationStatus}
+        nearestAirport={guidanceNearestAirport}
+        plannableIata={findPlannableAirportIata(consumerReservationsSorted)}
+        activeTripId={activeTripId}
+        urlTripId={searchParams.get("tripId")}
+        reservationId={nextUpcomingFlight?.id ?? null}
+        userLat={guidanceUserLat}
+        userLon={guidanceUserLon}
+        userAccuracyM={null}
+      />
     </main>
   );
 }
