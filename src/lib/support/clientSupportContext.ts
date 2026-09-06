@@ -18,6 +18,8 @@ export type SupportLiveContext = {
   disruptionNote?: string | null;
   /** Serialized reservation digest for deterministic Help answers. */
   reservationsJson?: string | null;
+  /** Latest traveler-observed airport facts line (never official FIDS). */
+  travelerObservedFacts?: string | null;
   /** IANA calendar day key for "today" in the traveler's context (YYYY-MM-DD). */
   todayKey?: string | null;
 };
@@ -83,6 +85,9 @@ export function formatClientSupportContext(): string {
   }
   if (ctx.disruptionNote?.trim()) {
     lines.push(`Traveler disruption note: ${ctx.disruptionNote.trim()}`);
+  }
+  if (ctx.travelerObservedFacts?.trim()) {
+    lines.push(ctx.travelerObservedFacts.trim());
   }
 
   if (lines.length === 0) return "";

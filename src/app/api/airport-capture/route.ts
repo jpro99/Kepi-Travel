@@ -5,6 +5,7 @@ import { enforceRateLimit } from "@/lib/rateLimit";
 import { generateId } from "@/lib/utils/generateId";
 import {
   buildLocalAirportCaptureRecord,
+  sanitizeCapturePhotoDataUrl,
   validateAirportCaptureInput,
 } from "@/lib/airportNav/airportCapture";
 import { listAirportCapturesForTrip, saveAirportCapture } from "@/lib/airportNav/airportCaptureStore";
@@ -27,6 +28,7 @@ const PostSchema = z.object({
   gateString: z.string().trim().max(12).nullable().optional(),
   mapMark: MapMarkSchema.nullable().optional(),
   note: z.string().trim().max(500).nullable().optional(),
+  photoDataUrl: z.string().trim().max(320_000).nullable().optional(),
   capturedAt: z.string().trim().max(40).optional(),
 });
 
@@ -75,7 +77,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid capture payload" }, { status: 400 });
   }
 
-  const validated = validateAirportCaptureInput(parsed.data);
+  const validated = validateAirportCaptureInput({
+    ...parsed.data,
+    photoDataUrl: sanitizeCapturePhotoDataUrl(parsed.data.photoDataUrl) ?? undefined,
+  });
   if (!validated.ok) {
     return NextResponse.json({ error: validated.error }, { status: 422 });
   }
@@ -87,6 +92,7 @@ export async function POST(req: Request) {
       iata: parsed.data.iata,
       gateString: validated.gateString,
       note: validated.note,
+      photoDataUrl: validated.photoDataUrl,
       mapMark: parsed.data.mapMark,
       capturedAt: parsed.data.capturedAt,
     },

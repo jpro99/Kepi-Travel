@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { AirportCaptureMapMark } from "@/lib/airportNav/airportCaptureTypes";
-import { enqueueAirportCapture, syncPendingAirportCaptures } from "@/lib/airportNav/airportCaptureQueue";
+import { enqueueAndSyncAirportCapture } from "@/lib/airportNav/airportCaptureQueue";
+import { compressCapturePhotoFile } from "@/lib/airportNav/airportCapturePhoto";
 
 interface AirportCaptureSheetProps {
   open: boolean;
@@ -25,6 +26,7 @@ export function AirportCaptureSheet({
 }: AirportCaptureSheetProps) {
   const [gateString, setGateString] = useState("");
   const [note, setNote] = useState("");
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -88,6 +90,36 @@ export function AirportCaptureSheet({
         />
       </label>
 
+      <div className="mt-3">
+        <p className="text-[12px] font-semibold text-slate-300">Photo (optional)</p>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="mt-1 w-full text-[13px] text-slate-200"
+          data-testid="airport-capture-photo"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            void compressCapturePhotoFile(file).then((dataUrl) => {
+              if (!dataUrl) {
+                setError("Photo too large — try a closer shot.");
+                return;
+              }
+              setPhotoDataUrl(dataUrl);
+              setError(null);
+            });
+          }}
+        />
+        {photoDataUrl ? (
+          <img
+            src={photoDataUrl}
+            alt="Capture preview"
+            className="mt-2 max-h-32 w-full rounded-xl object-cover"
+          />
+        ) : null}
+      </div>
+
       <p className="mt-2 text-[12px] text-slate-300">
         {hasMapMark
           ? "Map mark queued from your tap — we never invent a pin."
@@ -108,17 +140,17 @@ export function AirportCaptureSheet({
             setBusy(true);
             setError(null);
             try {
-              enqueueAirportCapture({
+              const { synced } = await enqueueAndSyncAirportCapture({
                 tripId,
                 reservationId,
                 iata,
                 gateString,
                 note,
+                photoDataUrl,
                 mapMark,
               });
-              const synced = await syncPendingAirportCaptures();
               setSavedMessage(
-                synced > 0
+                synced
                   ? "Saved — queued and synced."
                   : "Saved on this device — will sync when you're back online.",
               );

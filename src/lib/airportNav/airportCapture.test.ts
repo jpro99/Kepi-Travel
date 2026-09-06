@@ -37,6 +37,24 @@ test("formatTravelerObservedGateLine labels traveler provenance", () => {
   assert.match(line!, /you reported/i);
 });
 
+test("validateAirportCaptureInput accepts photo only", () => {
+  const result = validateAirportCaptureInput({
+    tripId: "trip-1",
+    iata: "FCO",
+    photoDataUrl: "data:image/jpeg;base64,abc",
+  });
+  assert.equal(result.ok, true);
+});
+
+test("validateAirportCaptureInput rejects invalid photo mime", () => {
+  const result = validateAirportCaptureInput({
+    tripId: "trip-1",
+    iata: "FCO",
+    photoDataUrl: "data:application/pdf;base64,abc",
+  });
+  assert.equal(result.ok, false);
+});
+
 test("indexTravelerObservedGates keeps latest gate per reservation", () => {
   const indexed = indexTravelerObservedGates([
     buildLocalAirportCaptureRecord({

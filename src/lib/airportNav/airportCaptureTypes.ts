@@ -24,6 +24,8 @@ export interface AirportCaptureRecord {
   gateString?: string | null;
   mapMark?: AirportCaptureMapMark | null;
   note?: string | null;
+  /** Optional traveler photo — data URL, synced when online. */
+  photoDataUrl?: string | null;
   capturedAt: string;
   syncStatus: AirportCaptureSyncStatus;
   syncedAt?: string | null;
@@ -37,5 +39,6 @@ export interface AirportCaptureSubmitInput {
   gateString?: string | null;
   mapMark?: AirportCaptureMapMark | null;
   note?: string | null;
+  photoDataUrl?: string | null;
   capturedAt?: string;
 }

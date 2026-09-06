@@ -17,10 +17,22 @@ export function sanitizeCaptureNote(value: string | null | undefined): string | 
   return trimmed.slice(0, 500);
 }
 
+/** Max base64 payload ~300 KB — keeps localStorage queue durable on flaky networks. */
+export const MAX_CAPTURE_PHOTO_CHARS = 320_000;
+
+export function sanitizeCapturePhotoDataUrl(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return null;
+  if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(trimmed)) return null;
+  if (trimmed.length > MAX_CAPTURE_PHOTO_CHARS) return null;
+  return trimmed;
+}
+
 export function validateAirportCaptureInput(input: AirportCaptureSubmitInput): {
   ok: true;
   gateString: string | null;
   note: string | null;
+  photoDataUrl: string | null;
 } | {
   ok: false;
   error: string;
@@ -36,19 +48,20 @@ export function validateAirportCaptureInput(input: AirportCaptureSubmitInput): {
 
   const gateString = sanitizeCaptureGateString(input.gateString);
   const note = sanitizeCaptureNote(input.note);
+  const photoDataUrl = sanitizeCapturePhotoDataUrl(input.photoDataUrl);
   const hasMapMark =
     input.mapMark != null &&
     Number.isFinite(input.mapMark.lng) &&
     Number.isFinite(input.mapMark.lat);
 
-  if (!gateString && !note && !hasMapMark) {
+  if (!gateString && !note && !hasMapMark && !photoDataUrl) {
     return {
       ok: false,
-      error: "Add a gate you see, tap your map spot, or write a short note.",
+      error: "Add a gate you see, a map mark, a note, or a photo.",
     };
   }
 
-  return { ok: true, gateString, note };
+  return { ok: true, gateString, note, photoDataUrl };
 }
 
 export function buildLocalAirportCaptureRecord(
@@ -83,6 +96,7 @@ export function buildLocalAirportCaptureRecord(
     gateString: validated.gateString,
     mapMark,
     note: validated.note,
+    photoDataUrl: validated.photoDataUrl,
     capturedAt,
     syncStatus: options?.syncStatus ?? "pending",
     syncedAt: null,
