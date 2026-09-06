@@ -31,7 +31,7 @@ export function derivePlanCityOffersFromReservation(
     const city =
       reservation.hotelSearchCity?.trim() ||
       deriveHotelSearchCityFromReservation({
-        type: "hotel",
+        id: "plan-city-offer",
         title: reservation.title,
         location: reservation.location,
         hotelSearchCity: reservation.hotelSearchCity,

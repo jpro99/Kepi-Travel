@@ -44,6 +44,7 @@ test("F20: reject LLM-style blog stop", () => {
         lat: 40.35,
         lng: 18.17,
         dwell: { unknown: true },
+        paceTags: ["ambitious"],
         source: { kind: "licensed_reviews", label: "Blog", ref: "tripadvisor:123" },
       }),
     PlanCityProvenanceError,

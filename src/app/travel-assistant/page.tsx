@@ -3008,10 +3008,6 @@ export default function TravelAssistantPage() {
           drained.promoted.map((row) => ({
             type: row.type,
             title: row.title,
-            location: row.location,
-            hotelSearchCity: row.hotelSearchCity,
-            flightArrivalAirport: row.flightArrivalAirport,
-            flightDepartureAirport: row.flightDepartureAirport,
           })),
         ),
       });
