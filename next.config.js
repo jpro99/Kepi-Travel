@@ -4,23 +4,15 @@ const createNextIntlPlugin = require("next-intl/plugin");
 
 const isCapacitorBuild = process.env.CAPACITOR_BUILD === "true";
 
-// next-pwa does not currently ship typed exports for TS configs.
-//
-// NOTE: swSrc and dest both resolve to public/sw.js, so `next build` reads
-// our hand-authored service worker as the injectManifest source AND writes
-// the built (minified, manifest-injected) output back to that same path.
-// That's fine for a single build from a fresh checkout (what Vercel does on
-// every deploy), but it means a SECOND `npm run build` in the same working
-// tree fails with "Can't find self.__WB_MANIFEST in your SW source" — the
-// previous build's output is no longer valid source. If you hit that
-// locally, run `git checkout -- public/sw.js` to restore the source before
-// rebuilding.
+// next-pwa injectManifest: hand-authored source in public/sw-src.js; build
+// output is written to public/sw.js (gitignored). Never commit the minified
+// sw.js — that breaks prebuild I61 and can fail Vercel preview deploys.
 const withPWA = require("next-pwa")({
   dest: "public",
   disable: process.env.NODE_ENV === "development" || isCapacitorBuild,
   register: true,
   skipWaiting: true,
-  swSrc: "public/sw.js",
+  swSrc: "public/sw-src.js",
 });
 
 const withBundleAnalyzer = createBundleAnalyzer({
