@@ -93,6 +93,10 @@ interface DesktopTripHomeViewProps {
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
   travelerType?: TravelStyleMode | null;
+  /** G49 — merged stop ranges for today-first Home coach. */
+  stopRanges?: import("@/lib/decision/stopDates").StopDateRange[];
+  travelerTimezone?: string | null;
+  tripId?: string | null;
 }
 
 export function DesktopTripHomeView({
@@ -129,6 +133,9 @@ export function DesktopTripHomeView({
   readinessChecklist = [],
   onOpenReadiness,
   travelerType = null,
+  stopRanges = [],
+  travelerTimezone = null,
+  tripId = null,
 }: DesktopTripHomeViewProps) {
   const transportReservations =
     transportReservationsProp ??
@@ -149,8 +156,10 @@ export function DesktopTripHomeView({
         stayDecisions,
         liveStatusByReservationId: liveStatus,
         hasActiveTrip: hasTrip,
+        stopRanges,
+        travelerTimezone,
       }),
-    [tripName, destination, startDate, endDate, reservations, stayDecisions, liveStatus, hasTrip],
+    [tripName, destination, startDate, endDate, reservations, stayDecisions, liveStatus, hasTrip, stopRanges, travelerTimezone],
   );
   const travelTakeover = isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
 
@@ -185,6 +194,9 @@ export function DesktopTripHomeView({
         onOpenReview={onOpenReview}
         readinessChecklist={readinessChecklist}
         onOpenReadiness={onOpenReadiness}
+        stopRanges={stopRanges}
+        travelerTimezone={travelerTimezone}
+        tripId={tripId}
       />
 
       {/* I36: on travel day, Home is the takeover screen only — no map/transport chrome. */}

@@ -4763,6 +4763,14 @@ export default function TravelAssistantPage() {
     if (firstHotel?.provider) return firstHotel.provider;
     return null;
   }, [consumerReservationsSorted, earliestFlightReservation]);
+  const travelerTimezoneForHome = useMemo(() => {
+    for (const reservation of consumerReservationsSorted) {
+      if (reservation.type !== "hotel") continue;
+      const tz = reservation.timezone?.trim();
+      if (tz && tz !== "Etc/UTC" && tz !== "UTC") return tz;
+    }
+    return null;
+  }, [consumerReservationsSorted]);
   const derivedTripStartDate = useMemo(() => {
     const flightDays = consumerReservationsSorted
       .filter((reservation) => reservation.type === "flight")
@@ -10433,6 +10441,8 @@ export default function TravelAssistantPage() {
                 nearestAirport={guidanceNearestAirport}
                 dayNotes={itineraryPrefs.dayNotes}
                 stopRanges={itineraryStopRanges}
+                effectiveStopRanges={effectiveStopRanges}
+                travelerTimezone={travelerTimezoneForHome}
                 hotelNotebookNote={itineraryPrefs.hotelNotebookNote}
                 onDayNoteChange={itineraryPrefs.updateDayNote}
                 onHotelNotebookChange={itineraryPrefs.updateHotelNotebookNote}
@@ -10671,6 +10681,9 @@ export default function TravelAssistantPage() {
                 readinessChecklist={readinessChecklistForHome}
                 onOpenReadiness={openReadinessChecklistInMoreTab}
                 travelerType={neuroTravelerType}
+                stopRanges={effectiveStopRanges}
+                travelerTimezone={travelerTimezoneForHome}
+                tripId={activeTripId}
               />
             )
           ) : consumerTab === "itinerary" ? (

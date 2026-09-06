@@ -227,6 +227,12 @@ When `wayfindingHonestyTier === strong` (SEA Atrius, FCO Digiport), the verified
 **G49 — Never claim landed before departure; depart coach tells leave-by + real drive ETA**  
 A mangled arrival timestamp must never produce "Landed Xm ago" while the departure clock is still in the future (AS654 ONT→SEA false landed). `computeJourneyPhase` skips airborne/just-landed when `now < dep`. Impossible arrival ≤ departure falls back to dep+4h. Depart Map/Airport coach shows leave-by (airport buffer only — I32) plus optional OSRM drive minutes labeled as route estimate, not live traffic — so "leave now → at terminal around X" is honest. Hotel Uber labels stay arrive-only (never the first Italy hotel while departing ONT).
 
+**G50 — Home today-first stay coach beats trip-start replay**  
+On a mid-stay calendar day, Home leads with the active booked stay (`resolveActiveHotelForDay` — not first hotel in storage order; Polignano wins over Bari proxy). Tomorrow checkout/move copy only when the next stay is on the itinerary (booked hotel or stop range — never invent Monopoli). Local hops use verified short-hop facts (Polignano↔Monopoli ~5 min train) without invented fares. `selectNextRemainingFlight` never replays Day 1 when all legs have departed; remaining BRI→FCO stays a secondary "Next flight" card, not the primary headline. Calendar today uses traveler stay timezone when at destination.
+
+**G51 — Home stay day: city once, next travel day + tickets lead**  
+On a stay day with a future move, Home says the current city + hotel exactly once in the SET header. Primary beat is the next travel day (earliest booked train/flight/checkout) with real reservation title/route/time — never triple-repeat "You're in {city}" in WHAT'S NEXT / TODAY. `WHEN DO YOU LEAVE` uses checkout or train departure from booked facts, not "drive time not included." Train tickets CTA opens stored artifacts in Kepi first (in-app boarding pass → source-view PDF/email → explicit stored pass URL); external manage/Trenitalia only when no stored ticket artifact — never invented barcodes. Next flight stays below the move block.
+
 **Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`
 
 
@@ -250,6 +256,11 @@ Departures coach + journey machine only fire when the layout has distinct `check
 Schedule-airborne windows may show **In the air** and the booked route (e.g. ONT→SEA) from `journeyPhase` — do not change the remaining-flight picker. **Landing in Xm** is live-radar copy only: require a successful en-route lookup (`active`, `enroute`, `departed`, `approach`, etc.). Lookup failure or unverified live status: detail is **booked scheduled arrival only** — never `liveStatus.error`, never the lookup toast/API string on Home. Missing arrival stays null. Toast may still show the error; the TODAY card must not.
 
 **Test:** `src/lib/travelAssistant/airborneLiveClaim.test.ts`
+
+**F17 — Stranded-at-airport + day-of door honesty (disruption belt)**  
+When booked departure has passed and coarse GPS still shows `at-airport` or `in-terminal` at that IATA (no airborne/live-enroute claim), Home must ask whether the traveler missed the flight or was denied boarding/rebooked — never assume they departed. EC 261 coach cites Regulation (EC) No 261/2004 on EUR-Lex only (Article 7 bands €250/€400/€600); Kepi coaches, does not file. Day-of doors use provenance `SCHEDULED_ITINERARY` | `AIRPORT_FIDS_TEXT` | `ALERT_PUSH_STRING` | `UNVERIFIED` — `UNVERIFIED` hides departure countdown; gate is STRING overlay only; bags/clubs from package Facts or honest unknown + official airport link. Rebook ingest clears stranded when the reservation departure moves forward.
+
+**Test:** `src/lib/travelAssistant/strandedFlightDetector.test.ts`, `src/lib/travelAssistant/ec261Coach.test.ts`, `src/lib/travelAssistant/dayOfDoorProvenance.test.ts`, `src/lib/travelAssistant/strandedRebookIngest.test.ts`
 
 **F15 — Next flight is earliest remaining departure, not storage order**  
 Home, Airport Mode, Book → Flights, and check-in handoff must pick the chronologically next booked segment (timezone-aware departure clock), including domestic connectors. Storage array order and long-haul role never override clock time — ONT→SEA before SEA→FCO on the same travel day. When `localTime` and `flightDepartureTime` disagree on the same day, use the later booked clock for sorting (live status may pull `localTime` earlier; delay updates push it later). Departure UTC conversion must use the **departure-airport IATA timezone**, not stored `flight.timezone` when it bleeds (e.g. `Europe/Rome` on a SEA departure would sort as 8:30 AM Pacific). Home TODAY uses `selectNextRemainingFlight` + `getLeaveByHint` on that pick — not a separate travel-day picker; leave-by labels render in departure-airport local time.
@@ -1069,6 +1080,8 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G47 | `src/lib/travelAssistant/connectionPlaybook.test.ts` |
 | G48 | `src/lib/airportNav/officialWayfinding.test.ts` |
 | G49 | `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts` |
+| G50 | `src/lib/travelAssistant/homeTodayCoach.test.ts`, `src/lib/travelAssistant/flightSort.test.ts` |
+| G51 | `src/lib/travelAssistant/homeTodayCoach.test.ts`, `src/lib/travelAssistant/trainTicketHandoff.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

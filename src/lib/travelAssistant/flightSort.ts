@@ -149,5 +149,8 @@ export function selectNextRemainingFlight<T extends FlightSortFields>(
     .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
     .filter((row) => Number.isFinite(row.utcMs));
   const upcoming = timed.find((row) => row.utcMs >= nowMs - NEXT_REMAINING_BEHIND_GRACE_MS);
-  return upcoming?.f ?? timed[0]?.f ?? null;
+  if (upcoming) return upcoming.f;
+  // G49 — mid-trip Home must not replay Day 1 when every leg has departed.
+  const future = timed.find((row) => row.utcMs > nowMs);
+  return future?.f ?? null;
 }

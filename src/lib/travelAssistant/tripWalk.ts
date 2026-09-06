@@ -15,6 +15,7 @@ import type {
   MissionControlReservation,
   ReadinessStatus,
 } from "@/lib/travelAssistant/tripPhase";
+import type { StrandedPrompt } from "@/lib/travelAssistant/strandedFlightDetector";
 
 export type TripWalkPhase =
   | "prep"
@@ -132,6 +133,12 @@ export function resolveTripWalk(input: {
   tripStatus?: ReadinessStatus;
   /** G46 — specific airport line replaces generic Open Airport Mode. */
   airportSpotlight?: HomeNextAction | null;
+  /** F17 — stranded at airport after missed departure overrides spotlight. */
+  strandedPrompt?: StrandedPrompt | null;
+  /** G49 — stay coach beats remaining-flight headline on mid-stay days. */
+  todayCoach?: HomeNextAction | null;
+  /** G51 — honest leave cue on stay days (checkout / train dep), not drive-time fallback. */
+  stayLeaveCue?: string | null;
 }): TripWalk {
   const stored =
     input.storedDepartureGate ?? input.nextFlight?.flightDepartureGate ?? null;
@@ -149,7 +156,7 @@ export function resolveTripWalk(input: {
     atAirport: input.atAirport,
     prepMode: input.prepMode,
     leaveByHint: input.leaveByHint,
-    hasDisruptionAttention,
+    hasDisruptionAttention: hasDisruptionAttention || Boolean(input.strandedPrompt),
     gateChange,
   });
 
@@ -162,9 +169,23 @@ export function resolveTripWalk(input: {
     unresolvedReviewCount: input.unresolvedReviewCount,
     nextFlight: input.nextFlight,
     airportSpotlight: input.airportSpotlight,
+    todayCoach: input.todayCoach,
   });
 
-  const next = gateChange && !input.prepMode ? gateChangeNext(gateChange) : baseNext;
+  const strandedNext: HomeNextAction | null = input.strandedPrompt
+    ? {
+        kind: "attention",
+        eyebrow: "Disruption",
+        title: input.strandedPrompt.headline,
+        detail: input.strandedPrompt.subline,
+        ctaLabel: "Tell Kepi what happened",
+        reservationId: input.strandedPrompt.reservationId,
+      }
+    : null;
+
+  const next =
+    strandedNext ??
+    (gateChange && !input.prepMode ? gateChangeNext(gateChange) : baseNext);
 
   const canBreak: TripWalkBreak[] = [];
   if (gateChange) {
@@ -215,7 +236,7 @@ export function resolveTripWalk(input: {
     phase,
     okay: { ok, line: okayLine },
     next,
-    leaveBy: input.leaveByHint ?? null,
+    leaveBy: input.stayLeaveCue ?? input.leaveByHint ?? null,
     canBreak: canBreak.slice(0, 3),
     gateChange,
   };

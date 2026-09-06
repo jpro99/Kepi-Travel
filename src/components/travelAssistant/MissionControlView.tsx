@@ -13,6 +13,7 @@ import { reservationPropertyName } from "@/lib/travelAssistant/reservationDispla
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { CheckInHandoffContent } from "@/lib/travelAssistant/checkInHandoff";
 import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffCard";
+import { TrainTicketHandoffCard } from "@/components/travelAssistant/TrainTicketHandoffCard";
 import {
   buildConnectionCalmStatus,
   buildHomePrepWatchItems,
@@ -24,7 +25,10 @@ import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransp
 import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNightCoverage";
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
 import { FreePlanSoftBanner } from "@/components/billing/FreePlanSoftBanner";
-import { resolveAirborneHeroCopy } from "@/lib/travelAssistant/airborneLiveClaim";
+import {
+  hasVerifiedLiveAirborneStatus,
+  resolveAirborneHeroCopy,
+} from "@/lib/travelAssistant/airborneLiveClaim";
 import { formatFlightStatusTrustLine } from "@/lib/travelAssistant/flightStatusTrustLine";
 import { resolveTripWalk } from "@/lib/travelAssistant/tripWalk";
 import {
@@ -37,6 +41,23 @@ import {
   resolveAirportSpotlightForHome,
   resolveArrivalHotelLabel,
 } from "@/lib/travelAssistant/airportSpotlightContext";
+import {
+  detectStrandedAtAirport,
+  type StrandedDisruptionReason,
+  type StrandedFlightState,
+} from "@/lib/travelAssistant/strandedFlightDetector";
+import { shouldClearStrandedOnRebook } from "@/lib/travelAssistant/strandedRebookIngest";
+import { StrandedFlightPromptCard } from "@/components/travelAssistant/StrandedFlightPromptCard";
+import type { StopDateRange } from "@/lib/decision/stopDates";
+import {
+  buildHomeTodayCoach,
+  homeTodayCoachNextAction,
+} from "@/lib/travelAssistant/homeTodayCoach";
+import {
+  resolveTrainTicketsForDay,
+  resolveTrainTicketOpenTarget,
+  type TrainTicketSourceReservation,
+} from "@/lib/travelAssistant/trainTicketHandoff";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -84,6 +105,16 @@ export interface MissionControlViewProps {
   /** G31 — persisted readiness checklist (More tab). */
   readinessChecklist?: ReadinessChecklistItem[];
   onOpenReadiness?: () => void;
+  /** F17 — day-of doors: gate/status/bags/clubs provenance (UNVERIFIED hides countdown). */
+  strandedFlight?: StrandedFlightState | null;
+  onStrandedFlightChange?: (state: StrandedFlightState | null) => void;
+  onForwardRebook?: () => void;
+  /** G49 — booked stop ranges for today-first stay coach. */
+  stopRanges?: StopDateRange[];
+  /** IANA timezone for calendar-today while traveling (e.g. Europe/Rome). */
+  travelerTimezone?: string | null;
+  /** Trip id for honest train-ticket source-view handoff. */
+  tripId?: string | null;
 }
 
 function statusColor(status: ReadinessStatus): string {
@@ -159,6 +190,12 @@ export function MissionControlView({
   onOpenReview,
   readinessChecklist = [],
   onOpenReadiness,
+  strandedFlight = null,
+  onStrandedFlightChange,
+  onForwardRebook,
+  stopRanges = [],
+  travelerTimezone = null,
+  tripId = null,
 }: MissionControlViewProps) {
   const passportComplete = readinessChecklist.find((item) => item.id === "ready-passport")?.complete ?? false;
 
@@ -174,6 +211,8 @@ export function MissionControlView({
         liveStatusByReservationId: liveStatus,
         hasActiveTrip,
         passportComplete,
+        stopRanges,
+        travelerTimezone,
       }),
     [
       tripName,
@@ -185,6 +224,8 @@ export function MissionControlView({
       liveStatus,
       hasActiveTrip,
       passportComplete,
+      stopRanges,
+      travelerTimezone,
     ],
   );
 
@@ -194,11 +235,41 @@ export function MissionControlView({
   const [zoom, setZoom] = useState<MissionControlZoom>("today");
   const [zoomTouched, setZoomTouched] = useState(false);
   const [selectedDay, setSelectedDay] = useState<DayReadiness | null>(null);
+  const [localStranded, setLocalStranded] = useState<StrandedFlightState | null>(null);
+
+  useEffect(() => {
+    if (strandedFlight != null) return;
+    try {
+      const raw = localStorage.getItem(`kepi-stranded:${tripName}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StrandedFlightState;
+      if (parsed?.reservationId) setLocalStranded(parsed);
+    } catch {
+      /* ignore corrupt storage */
+    }
+  }, [tripName, strandedFlight]);
+
+  const effectiveStranded = strandedFlight ?? localStranded;
+  const persistStranded = (state: StrandedFlightState | null) => {
+    if (onStrandedFlightChange) {
+      onStrandedFlightChange(state);
+      return;
+    }
+    setLocalStranded(state);
+    try {
+      const key = `kepi-stranded:${tripName}`;
+      if (state) localStorage.setItem(key, JSON.stringify(state));
+      else localStorage.removeItem(key);
+    } catch {
+      /* storage full / private mode */
+    }
+  };
 
   useEffect(() => {
     if (zoomTouched) return;
     if (prepMode) setZoom("trip");
-  }, [prepMode, zoomTouched]);
+    else if (showTravelOps && snap.phase === "at_destination") setZoom("today");
+  }, [prepMode, zoomTouched, showTravelOps, snap.phase]);
 
   const connectionCalm: ConnectionCalmStatus = useMemo(
     () =>
@@ -269,6 +340,57 @@ export function MissionControlView({
   const atAirport =
     locationStatus === "at-airport" || locationStatus === "in-terminal";
 
+  const nextFlightLive = snap.nextFlight ? liveStatus?.[snap.nextFlight.id] : undefined;
+
+  const strandedDetection = useMemo(() => {
+    if (!snap.nextFlight || journeyPhase?.kind === "airborne") {
+      return { shouldPrompt: false, prompt: null as ReturnType<typeof detectStrandedAtAirport>["prompt"] };
+    }
+    const liveEnRoute = hasVerifiedLiveAirborneStatus(nextFlightLive);
+    return detectStrandedAtAirport({
+      flight: snap.nextFlight,
+      locationStatus: locationStatus === "airborne" ? "away" : locationStatus,
+      journeyAirborneForThisFlight: false,
+      liveEnRoute,
+      existingState: effectiveStranded,
+    });
+  }, [snap.nextFlight, journeyPhase, locationStatus, nextFlightLive, effectiveStranded]);
+
+  useEffect(() => {
+    if (!effectiveStranded) return;
+    if (
+      shouldClearStrandedOnRebook({
+        stranded: effectiveStranded,
+        reservations: reservations,
+      })
+    ) {
+      persistStranded(null);
+    }
+  }, [reservations, effectiveStranded]);
+
+  const handleStrandedConfirm = (reason: StrandedDisruptionReason) => {
+    if (!strandedDetection.prompt) return;
+    persistStranded({
+      reservationId: strandedDetection.prompt.reservationId,
+      detectedAt: effectiveStranded?.detectedAt ?? new Date().toISOString(),
+      confirmed: true,
+      reason,
+    });
+  };
+
+  const handleStrandedDismiss = () => {
+    if (!strandedDetection.prompt) return;
+    persistStranded({
+      reservationId: strandedDetection.prompt.reservationId,
+      detectedAt: effectiveStranded?.detectedAt ?? new Date().toISOString(),
+      dismissedAt: new Date().toISOString(),
+    });
+  };
+
+  const handleStrandedMadeFlight = () => {
+    persistStranded(null);
+  };
+
   const arrivalHotelLabel = useMemo(() => {
     if (journeyPhase?.kind !== "just-landed") return null;
     const flight = journeyPhase.flight as MissionControlReservation;
@@ -307,6 +429,56 @@ export function MissionControlView({
     ],
   );
 
+  const showStrandedCard =
+    strandedDetection.shouldPrompt && strandedDetection.prompt != null;
+
+  const todayCoach = useMemo(() => {
+    if (!showTravelOps || snap.phase !== "at_destination") return null;
+    if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
+    return buildHomeTodayCoach({
+      reservations,
+      stopRanges,
+      timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+    });
+  }, [
+    showTravelOps,
+    snap.phase,
+    journeyPhase?.kind,
+    reservations,
+    stopRanges,
+    travelerTimezone,
+    snap.tonightHotel,
+  ]);
+
+  const nextTravelDayTrainHandoffs = useMemo(() => {
+    if (!todayCoach?.nextTravelMove) return [];
+    return resolveTrainTicketsForDay(
+      reservations as TrainTicketSourceReservation[],
+      todayCoach.nextTravelMove.dateKey,
+      tripId,
+    );
+  }, [todayCoach?.nextTravelMove, reservations, tripId]);
+
+  const nextTravelDayTicketUrl = useMemo(() => {
+    if (!todayCoach?.nextTravelMove?.reservationId) return null;
+    const train = (reservations as TrainTicketSourceReservation[]).find(
+      (row) => row.id === todayCoach.nextTravelMove!.reservationId,
+    );
+    if (!train) return null;
+    return resolveTrainTicketOpenTarget(train, tripId)?.url ?? null;
+  }, [todayCoach?.nextTravelMove, reservations, tripId]);
+
+  const todayCoachAction = useMemo(
+    () =>
+      todayCoach
+        ? homeTodayCoachNextAction(todayCoach, {
+            hasTrainTicketHandoff: nextTravelDayTrainHandoffs.length > 0,
+            ticketUrl: nextTravelDayTicketUrl,
+          })
+        : null,
+    [todayCoach, nextTravelDayTrainHandoffs, nextTravelDayTicketUrl],
+  );
+
   const walk = useMemo(
     () =>
       resolveTripWalk({
@@ -326,6 +498,9 @@ export function MissionControlView({
         storedDepartureGate: snap.nextFlight?.flightDepartureGate,
         connectionCalm,
         airportSpotlight,
+        strandedPrompt: showStrandedCard ? strandedDetection.prompt : null,
+        todayCoach: todayCoachAction,
+        stayLeaveCue: todayCoach?.leaveCue ?? null,
       }),
     [
       journeyPhase,
@@ -341,6 +516,10 @@ export function MissionControlView({
       liveStatus,
       connectionCalm,
       airportSpotlight,
+      showStrandedCard,
+      strandedDetection.prompt,
+      todayCoachAction,
+      todayCoach?.leaveCue,
     ],
   );
   const travelTakeover =
@@ -405,6 +584,17 @@ export function MissionControlView({
         className="space-y-3"
         style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif' }}
       >
+        {showStrandedCard && strandedDetection.prompt ? (
+          <StrandedFlightPromptCard
+            prompt={strandedDetection.prompt}
+            state={effectiveStranded}
+            onConfirmMissed={handleStrandedConfirm}
+            onDismiss={handleStrandedDismiss}
+            onForwardRebook={() => onForwardRebook?.() ?? onOpenPlan()}
+            onMadeFlight={handleStrandedMadeFlight}
+          />
+        ) : null}
+
         <article
           className="rounded-3xl px-5 py-8 text-white shadow-[0_1px_3px_rgba(0,0,0,0.12)]"
           style={{ background: heroBg }}
@@ -486,14 +676,21 @@ export function MissionControlView({
 
   const activeStatus =
     zoom === "today" ? snap.today.status : zoom === "week" ? weekStatus(snap.week) : snap.tripStatus;
-  const activeSummary = prepMode
-    ? prepWatchItems[0]?.detail ??
-      "Prep mode — documents, stays, and pricing. Connection checks show closer to departure."
-    : zoom === "today"
-      ? snap.today.summary
-      : zoom === "week"
-        ? weekSummary(snap.week)
-        : snap.tripSummary;
+  const stayCoachLead = todayCoach && zoom === "today" && showTravelOps && !prepMode;
+  const activeSummary = stayCoachLead
+    ? todayCoach.nextTravelMove
+      ? `${todayCoach.nextTravelMove.dayLabel} — ${todayCoach.nextTravelMove.headline}. ${todayCoach.nextTravelMove.detail}`
+      : [todayCoach.leadDetail, todayCoach.tomorrowDetail, todayCoach.transferHint]
+          .filter(Boolean)
+          .join(" ")
+    : prepMode
+      ? prepWatchItems[0]?.detail ??
+        "Prep mode — documents, stays, and pricing. Connection checks show closer to departure."
+      : zoom === "today"
+        ? snap.today.summary
+        : zoom === "week"
+          ? weekSummary(snap.week)
+          : snap.tripSummary;
   const heroAttention = prepMode
     ? []
     : zoom === "today"
@@ -516,7 +713,11 @@ export function MissionControlView({
     }
     if (nextAction.kind === "prep") {
       if (nextAction.prepHref && typeof window !== "undefined") {
-        window.open(nextAction.prepHref, "_blank", "noopener,noreferrer");
+        if (nextAction.prepHref.startsWith("/")) {
+          window.location.assign(nextAction.prepHref);
+        } else {
+          window.open(nextAction.prepHref, "_blank", "noopener,noreferrer");
+        }
         return;
       }
       onOpenPlan();
@@ -621,11 +822,13 @@ export function MissionControlView({
           {statusLabel(activeStatus)}
         </p>
         <h2 className="mt-1 text-[22px] font-semibold tracking-tight text-[#1D1D1F]">
-          {heroTitle(activeStatus, zoom, {
-            day: snap.today,
-            daysUntil: snap.daysUntilDeparture,
-            prepMode,
-          })}
+          {stayCoachLead
+            ? todayCoach.leadTitle
+            : heroTitle(activeStatus, zoom, {
+                day: snap.today,
+                daysUntil: snap.daysUntilDeparture,
+                prepMode,
+              })}
         </h2>
         <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
 
@@ -650,7 +853,9 @@ export function MissionControlView({
               {walk.leaveBy ??
                 (prepMode
                   ? "Not the leave window yet"
-                  : "Drive time not included — we will not invent it")}
+                  : stayCoachLead && todayCoach?.nextTravelMove
+                    ? todayCoach.nextTravelMove.detail
+                    : "No leave time on the trip yet")}
             </dd>
           </div>
           <div>
@@ -664,6 +869,43 @@ export function MissionControlView({
             </dd>
           </div>
         </dl>
+
+        {stayCoachLead && todayCoach.nextTravelMove ? (
+          <div className="mt-3 space-y-2">
+            {nextTravelDayTrainHandoffs.length > 0 ? (
+              nextTravelDayTrainHandoffs.map((handoff) => (
+                <TrainTicketHandoffCard
+                  key={handoff.reservationId}
+                  content={handoff}
+                  eyebrow={`Next travel day · ${todayCoach.nextTravelMove!.dayLabel}`}
+                />
+              ))
+            ) : todayCoach.nextTravelMove.kind === "train" ? (
+              <div className="rounded-xl bg-white px-3 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Next travel day · {todayCoach.nextTravelMove.dayLabel}
+                </p>
+                <p className="mt-1 text-[16px] font-semibold text-[#1D1D1F]">
+                  {todayCoach.nextTravelMove.headline}
+                </p>
+                <p className="mt-1 text-[14px] text-[#6E6E73]">{todayCoach.nextTravelMove.detail}</p>
+                <p className="mt-2 text-[13px] text-[#6E6E73]">
+                  Train is booked — forward your ticket email to open it from Home.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-white px-3 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Next travel day · {todayCoach.nextTravelMove.dayLabel}
+                </p>
+                <p className="mt-1 text-[16px] font-semibold text-[#1D1D1F]">
+                  {todayCoach.nextTravelMove.headline}
+                </p>
+                <p className="mt-1 text-[14px] text-[#6E6E73]">{todayCoach.nextTravelMove.detail}</p>
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {showTravelOps && connectionCalm.line ? (
           <p
@@ -700,13 +942,15 @@ export function MissionControlView({
           </p>
         ) : null}
 
-        {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day") ? (
+        {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day" || stayCoachLead) ? (
           <button
             type="button"
             onClick={() => onReservationTap?.(snap.nextFlight!.id)}
             className="mt-3 w-full rounded-xl bg-white px-3 py-3 text-left"
           >
-            <p className="text-[13px] font-semibold text-[#6E6E73]">Next flight</p>
+            <p className="text-[13px] font-semibold text-[#6E6E73]">
+              {stayCoachLead ? "Next flight" : "Next flight"}
+            </p>
             <p className="mt-0.5 text-[16px] font-semibold text-[#1D1D1F]">
               {snap.nextFlight.flightNumber || "Flight"} ·{" "}
               {snap.nextFlight.flightDepartureAirport} → {snap.nextFlight.flightArrivalAirport}
@@ -743,6 +987,7 @@ export function MissionControlView({
           </div>
         ) : null}
 
+        {!(stayCoachLead && todayCoach?.nextTravelMove) ? (
         <div
           className={`mt-4 rounded-2xl px-4 py-4 ${
             nextAction.kind === "ready"
@@ -769,6 +1014,7 @@ export function MissionControlView({
             {nextAction.ctaLabel}
           </button>
         </div>
+        ) : null}
 
         {alsoAttention.length > 0 ? (
           <div className="mt-3">
@@ -872,7 +1118,9 @@ export function MissionControlView({
 
       {checkInHandoff ? <CheckInHandoffCard content={checkInHandoff} /> : null}
 
-      {snap.tonightHotel && (snap.phase === "at_destination" || snap.phase === "departure_day") ? (
+      {snap.tonightHotel &&
+      (snap.phase === "at_destination" || snap.phase === "departure_day") &&
+      !stayCoachLead ? (
         <article className="rounded-2xl bg-[#F5F5F7] p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
             {snap.phase === "departure_day" ? "Tonight" : "Where you are"}
@@ -901,6 +1149,8 @@ export function MissionControlView({
       {selectedDay ? (
         <DayDetailSheet
           day={selectedDay}
+          tripId={tripId}
+          reservations={reservations as TrainTicketSourceReservation[]}
           onClose={() => setSelectedDay(null)}
           onOpenPlan={onOpenPlan}
           onReservationTap={onReservationTap}
@@ -927,17 +1177,23 @@ function weekSummary(days: DayReadiness[]): string {
 
 function DayDetailSheet({
   day,
+  tripId,
+  reservations,
   onClose,
   onOpenPlan,
   onReservationTap,
   onGapActionTap,
 }: {
   day: DayReadiness;
+  tripId?: string | null;
+  reservations: TrainTicketSourceReservation[];
   onClose: () => void;
   onOpenPlan: () => void;
   onReservationTap?: (id: string) => void;
   onGapActionTap?: (action: TripGapNavigationAction) => void;
 }) {
+  const trainTicketHandoffs = resolveTrainTicketsForDay(reservations, day.dateKey, tripId);
+
   return (
     <div className="fixed inset-0 z-[120] flex items-end bg-black/40 sm:items-center sm:justify-center sm:p-6">
       <div className="max-h-[88dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 sm:max-w-lg sm:rounded-3xl">
@@ -998,6 +1254,14 @@ function DayDetailSheet({
                 </li>
               ))}
             </ul>
+          </section>
+        ) : null}
+
+        {trainTicketHandoffs.length > 0 ? (
+          <section className="mt-4 space-y-2">
+            {trainTicketHandoffs.map((handoff) => (
+              <TrainTicketHandoffCard key={handoff.reservationId} content={handoff} />
+            ))}
           </section>
         ) : null}
 
