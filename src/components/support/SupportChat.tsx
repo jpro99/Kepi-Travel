@@ -20,6 +20,8 @@ const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
 const PLAN_CITY_OPEN_EVENT = "kepi:plan-city-open";
 const SUPPORT_QUICK_PROMPTS = [
   "Where am I?",
+  "Best walking tour near me?",
+  "Restaurant with air conditioning?",
   "What's my next travel day?",
   "What time is my train?",
   "Plan a city day",

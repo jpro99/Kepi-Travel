@@ -4,6 +4,7 @@ import { LiveMapLink } from "@/components/travelAssistant/LiveMapLink";
 import { MapTabView } from "@/components/travelAssistant/MapTabView";
 import { useMemo, useState, type Ref } from "react";
 import { MissionControlView } from "@/components/travelAssistant/MissionControlView";
+import { TravelAskPanel } from "@/components/travelAssistant/TravelAskPanel";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { resolveNextCheckInHandoff } from "@/lib/travelAssistant/checkInHandoff";
 import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
@@ -350,6 +351,16 @@ export function MobileMapForwardShell({
           travelerTimezone={travelerTimezone}
           tripId={tripId}
         />
+
+        {hasActiveTrip ? (
+          <TravelAskPanel
+            destination={destination}
+            tripName={tripName}
+            startDate={startDate}
+            endDate={endDate}
+            variant="assist"
+          />
+        ) : null}
 
         {hasActiveTrip && tripSpendSummary ? (
           <TripSpendBadge

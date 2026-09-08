@@ -170,15 +170,15 @@
     "signOut": "Cerrar sesión"
   },
   "SupportChat": {
-    "welcome": "¡Hola! Soy Soporte Kepi. Puedo ayudarte con viajes, reservas, facturación, notificaciones y el uso de la app.",
-    "emptyFallback": "Puedo ayudarte con temas de soporte de Kepi. ¿Puedes dar un poco más de detalle?",
-    "errorFallback": "No pude completar esa respuesta ahora. Inténtalo de nuevo o contacta a un humano.",
-    "bubbleLabel": "Chat de soporte",
-    "bubbleLabelUnread": "Chat de soporte ({count} sin leer)",
-    "subtitle": "Ayuda rápida para viajes, facturación y la app",
+    "welcome": "¡Hola! Soy Kepi. Pregunta por tours a pie, restaurantes, barrios, tus reservas o cómo usar la app.",
+    "emptyFallback": "Puedo ayudarte con tips locales y tu viaje. ¿Puedes dar un poco más de detalle?",
+    "errorFallback": "No pude completar esa respuesta ahora. Inténtalo de nuevo en un momento.",
+    "bubbleLabel": "Pregunta a Kepi",
+    "bubbleLabelUnread": "Pregunta a Kepi ({count} sin leer)",
+    "subtitle": "Tours, comida, viaje y ayuda de la app",
     "close": "Cerrar",
     "thinking": "Pensando...",
-    "inputPlaceholder": "Pregunta a Soporte Kepi...",
+    "inputPlaceholder": "Pregunta por tours, comida, tu viaje…",
     "sending": "Enviando...",
     "send": "Enviar"
   },

@@ -275,6 +275,7 @@ import { PointsMilesLearnPanel } from "@/components/travelAssistant/PointsMilesL
 import { ConsumerSectionIcon } from "@/components/travelAssistant/ConsumerSectionIcon";
 import { EMPTY_HOME_CARD_CLASS } from "@/lib/travelAssistant/consumerVisualChrome";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
+import { TravelAskPanel } from "@/components/travelAssistant/TravelAskPanel";
 import {
   TravelStyleBadge,
   TravelStyleQuiz,
@@ -10999,6 +11000,14 @@ export default function TravelAssistantPage() {
             </section>
           ) : (
             <section className="space-y-3">
+              <TravelAskPanel
+                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                tripName={activeTrip?.name ?? null}
+                startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+                endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
+                variant="embedded"
+              />
+
               {activeTrip && readinessItems.length > 0 ? (
                 <TripReadinessChecklistSection
                   id="readiness-checklist-section"
