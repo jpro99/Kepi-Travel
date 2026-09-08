@@ -32,4 +32,4 @@ const SUPPORT_QUICK_PROMPTS = [
 ] as const;
 const BUG_REPORT_OPEN_EVENT = "kepi:bug-report-open";
 
-// ... truncated for test
+// TRUNCATED_PLACEHOLDER
