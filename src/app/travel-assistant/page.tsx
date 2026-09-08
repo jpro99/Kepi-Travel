@@ -1,1 +1,1 @@
-file:///tmp/page-patched.tsx
+__LOAD_FROM__/tmp/page-content-only.txt
