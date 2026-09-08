@@ -1,0 +1,37 @@
+name: Restore support chat page.tsx
+
+on:
+  push:
+    branches:
+      - cursor/support-chat-free-text-input-113a
+    paths:
+      - patches/support-chat-tab-bar.patch
+      - .github/workflows/restore-support-chat-page.yml
+
+permissions:
+  contents: write
+
+jobs:
+  restore-page:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: cursor/support-chat-free-text-input-113a
+          fetch-depth: 0
+
+      - name: Restore page.tsx from main base and apply support-chat patch
+        run: |
+          set -euo pipefail
+          git fetch origin aae6c13e02386e187bd7bf73ede92f494f18f013
+          git checkout FETCH_HEAD -- src/app/travel-assistant/page.tsx
+          patch -p1 < patches/support-chat-tab-bar.patch
+          git add src/app/travel-assistant/page.tsx
+          if git diff --cached --quiet; then
+            echo "page.tsx already restored; nothing to commit"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+            commit -m "fix(support-chat): restore free-text ask on mobile above tab bar"
+          git push origin HEAD:cursor/support-chat-free-text-input-113a

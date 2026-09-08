@@ -1,0 +1,38 @@
+diff --git a/src/app/travel-assistant/page.tsx b/src/app/travel-assistant/page.tsx
+index f818e95..8225770 100644
+--- a/src/app/travel-assistant/page.tsx
++++ b/src/app/travel-assistant/page.tsx
+@@ -287,7 +287,7 @@ import { ReferralCard } from "@/components/referral/ReferralCard";
+ import { WeatherCard } from "@/components/travelAssistant/WeatherCard";
+ import { LocalIntelligencePanel } from "@/components/travelAssistant/LocalIntelligencePanel";
+ import { useTranslations } from "next-intl";
+-import { openSupportChat } from "@/components/support/SupportChat";
++import { openSupportChat, SUPPORT_CHAT_STATE_EVENT } from "@/components/support/SupportChat";
+ import { PlanCityView } from "@/components/planCity/PlanCityView";
+ import type { PlanCityCatalog } from "@/lib/planCity/types";
+ import {
+@@ -2318,6 +2318,16 @@ export default function TravelAssistantPage() {
+   const [pushMessage, setPushMessage] = useState<string | null>(null);
+   const [talkPlannerOpen, setTalkPlannerOpen] = useState(false);
+   const [talkPlannerLoading, setTalkPlannerLoading] = useState(false);
++  const [supportChatOpen, setSupportChatOpen] = useState(false);
++
++  useEffect(() => {
++    const onSupportChatState = (event: Event): void => {
++      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
++      setSupportChatOpen(Boolean(detail?.open));
++    };
++    window.addEventListener(SUPPORT_CHAT_STATE_EVENT, onSupportChatState);
++    return () => window.removeEventListener(SUPPORT_CHAT_STATE_EVENT, onSupportChatState);
++  }, []);
+   const [bookFlightsWizardOpen, setBookFlightsWizardOpen] = useState(false);
+   const [storedTripPlan, setStoredTripPlan] = useState<StoredTripPlan | null>(null);
+   const pendingTalkDayNotesRef = useRef<Record<string, string> | null>(null);
+@@ -9730,6 +9740,7 @@ export default function TravelAssistantPage() {
+     travelStyleQuizOpen ||
+     myTripsModalOpen ||
+     manualReservationModalOpen ||
++    supportChatOpen ||
+     Boolean(activeDrawer) ||
+     consumerReviewQueueSession.open;
+ 
