@@ -1,1 +1,1 @@
-__LOAD_FROM__/tmp/page-content-only.txt
+test
