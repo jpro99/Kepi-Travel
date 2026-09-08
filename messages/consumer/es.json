@@ -178,7 +178,8 @@
     "subtitle": "Ayuda rápida para viajes, facturación y la app",
     "close": "Cerrar",
     "thinking": "Pensando...",
-    "inputPlaceholder": "Pregunta a Soporte Kepi...",
+    "inputPlaceholder": "Pregunta a Kepi lo que quieras — tours, restaurantes, tu viaje…",
+    "askAnythingLabel": "Pregunta lo que quieras sobre tu viaje",
     "sending": "Enviando...",
     "send": "Enviar"
   },
