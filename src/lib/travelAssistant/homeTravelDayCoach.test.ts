@@ -56,7 +56,10 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
   });
   assert.ok(coach);
   assert.match(coach!.headline, /Travel day/i);
-  assert.match(coach!.headline, /BRI|VCE|train/i);
+  assert.match(coach!.headline, /Venice|VCE/i);
+  assert.doesNotMatch(coach!.headline, /fly to FCO|→ FCO/i);
+  assert.doesNotMatch(coach!.headline, /Lecce/i);
+  assert.equal(coach!.briAirportCoachSteps.length, 4);
   assert.match(coach!.leadDetail, /8312/i);
   assert.match(coach!.leadDetail, /91312|Regionale/i);
   assert.match(coach!.leadDetail, /BRI.*VCE|15:20|3:20/i);
@@ -86,8 +89,11 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[0]!.actionUrl, /passenger=stephanie/i);
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[1]!.actionUrl, /passenger=jeffery/i);
   assert.match(coach!.leaveCue ?? "", /Train departs 9:35/i);
-  assert.ok(coach!.walkthroughSteps.length >= 7);
-  const walkText = coach!.walkthroughSteps.map((step) => `${step.title} ${step.detail}`).join(" ");
+  assert.equal(coach!.briAirportCoachSteps.length, 4);
+  assert.ok(coach!.walkthroughSteps.length >= 3);
+  const walkText = [...coach!.briAirportCoachSteps, ...coach!.walkthroughSteps]
+    .map((step) => `${step.title} ${step.detail}`)
+    .join(" ");
   assert.match(walkText, /8312/i);
   assert.match(walkText, /After you alight at Bari Centrale/i);
   assert.match(walkText, /91312/i);
@@ -119,22 +125,24 @@ test("G55: walkthrough order is 8312 → Centrale → 91312 → BRI coach (4) �
     tripId: BARI_VENICE_TRIP_ID,
   });
   assert.ok(coach);
-  const titles = coach!.walkthroughSteps.map((step) => step.title);
-  const idx8312 = titles.findIndex((title) => /8312/u.test(title));
-  const idxCentrale = titles.findIndex((title) => /After you alight/i.test(title));
-  const idx91312 = titles.findIndex((title) => /91312/u.test(title));
-  const idxKwStop = titles.findIndex((title) => /Aeroporto K\.W\./i.test(title));
-  const idxTunnel = titles.findIndex((title) => /tunnel into arrivals/i.test(title));
-  const idxArrivals = titles.findIndex((title) => /Ground floor = arrivals/i.test(title));
-  const idxCheckIn = titles.findIndex((title) => /isole A\/B and C\/D/i.test(title));
-  const idxFlight = titles.findIndex((title) => /BRI → VCE/u.test(title));
+  assert.equal(coach!.briAirportCoachSteps.length, 4);
+  const itineraryTitles = coach!.walkthroughSteps.map((step) => step.title);
+  const briTitles = coach!.briAirportCoachSteps.map((step) => step.title);
+  const idx8312 = itineraryTitles.findIndex((title) => /8312/u.test(title));
+  const idxCentrale = itineraryTitles.findIndex((title) => /After you alight/i.test(title));
+  const idx91312 = itineraryTitles.findIndex((title) => /91312/u.test(title));
+  const idxKwStop = briTitles.findIndex((title) => /Aeroporto K\.W\./i.test(title));
+  const idxTunnel = briTitles.findIndex((title) => /tunnel into arrivals/i.test(title));
+  const idxArrivals = briTitles.findIndex((title) => /Ground floor = arrivals/i.test(title));
+  const idxCheckIn = briTitles.findIndex((title) => /isole A\/B and C\/D/i.test(title));
+  const idxFlight = itineraryTitles.findIndex((title) => /BRI → VCE/u.test(title));
   assert.ok(idx8312 >= 0 && idxCentrale > idx8312);
   assert.ok(idx91312 > idxCentrale);
-  assert.ok(idxKwStop > idx91312);
+  assert.ok(idxKwStop >= 0);
   assert.ok(idxTunnel > idxKwStop);
   assert.ok(idxArrivals > idxTunnel);
   assert.ok(idxCheckIn > idxArrivals);
-  assert.ok(idxFlight > idxCheckIn);
+  assert.ok(idxFlight > idx91312);
   assert.equal(idxFlight, coach!.walkthroughSteps.length - 1);
 });
 

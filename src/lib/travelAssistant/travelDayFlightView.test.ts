@@ -6,6 +6,7 @@ import {
 } from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
 import {
   buildHomeFirstPaintLead,
+  buildHomeTravelDayCoach,
   formatTravelDayFlightLead,
   hasActiveTravelDayCoach,
   resolveTodayTravelDayCoach,
@@ -199,12 +200,15 @@ test("first-paint Sep 12 live-shaped: gospel coach — not Lecce mid-stay or AZ1
   });
   assert.equal(paint.travelDayLead, true);
   assert.doesNotMatch(paint.headline, /You're in Lecce/i);
+  assert.doesNotMatch(paint.headline, /fly to FCO|→ FCO/i);
+  assert.match(paint.headline, /VCE|Venice/i);
   assert.doesNotMatch(paint.aboveFoldText, /AZ1616/i);
+  assert.doesNotMatch(paint.aboveFoldText, /fly to FCO|→ FCO/i);
   assert.match(paint.aboveFoldText, /8312/i);
   assert.match(paint.aboveFoldText, /91312/i);
   assert.match(paint.aboveFoldText, /Z84T4Z/i);
   assert.match(paint.aboveFoldText, /tunnel/i);
-  assert.match(paint.aboveFoldText, /isole A\/B/i);
+  assert.match(paint.aboveFoldText, /isole A\/B|Aeroporto K\.W\./i);
   assert.equal(
     paint.nextFlightText,
     "Confirmation Z84T4Z · BRI → VCE · 3:20 PM–6:25 PM · 1 stop · VCE T1",
@@ -220,9 +224,25 @@ test("first-paint Sep 11 eve: tomorrow travel-day coach leads — not Lecce / AZ
   });
   assert.equal(paint.travelDayLead, true);
   assert.doesNotMatch(paint.headline, /You're in Lecce/i);
+  assert.doesNotMatch(paint.headline, /fly to FCO|→ FCO/i);
+  assert.match(paint.headline, /VCE|Venice/i);
   assert.doesNotMatch(paint.aboveFoldText, /AZ1616/i);
   assert.match(paint.aboveFoldText, /91312/i);
   assert.match(paint.aboveFoldText, /Z84T4Z/i);
+  assert.match(paint.aboveFoldText, /tunnel|isole|K\.W\./i);
+});
+
+test("live-shaped headline uses merged VCE arrival — not connector FCO or Lecce lead", () => {
+  const coach = buildHomeTravelDayCoach({
+    reservations: liveFullTripReservations(true),
+    dateKey: "2026-09-12",
+    timezone: "Europe/Rome",
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.ok(coach);
+  assert.match(coach!.headline, /fly to Venice/i);
+  assert.doesNotMatch(coach!.headline, /fly to FCO|Lecce/i);
+  assert.equal(coach!.briAirportCoachSteps.length, 4);
 });
 
 test("live-shaped Z84T4Z without summary leg still composes BRI→VCE from connector chain", () => {

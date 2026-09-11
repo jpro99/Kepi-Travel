@@ -57,6 +57,8 @@ export interface HomeTravelDayCoach {
   leaveCue: string | null;
   airportTransferHint: string | null;
   hasTrainBeforeFlight: boolean;
+  /** BRI KW→tunnel→arrivals→isole — promoted above fold when Reg 91312 / airport rail present. */
+  briAirportCoachSteps: TravelDayWalkthroughStep[];
   walkthroughSteps: TravelDayWalkthroughStep[];
 }
 
@@ -181,6 +183,59 @@ function trainDepartsBariCentraleFnB(
   return /\bbari\b/u.test(blob) && /\b(fnb|c\.le|centrale)\b/u.test(blob);
 }
 
+function trainArrivesBariAirport(
+  reservation: Pick<TrainTicketSourceReservation, "location" | "title">,
+): boolean {
+  const blob = `${reservation.location ?? ""} ${reservation.title ?? ""}`.toLowerCase();
+  return /\bbari\b/u.test(blob) && /\b(aeroporto|airport|karol|wojty)/u.test(blob);
+}
+
+function hasBariAirportRailConnector(trains: TrainTicketSourceReservation[]): boolean {
+  return trains.some((train) => trainDepartsBariCentraleFnB(train) || trainArrivesBariAirport(train));
+}
+
+/** Merged gospel arrival — VCE reads as Venice; never use connector leg FCO. */
+export function formatTravelDayArrivalLabel(flight: HomeTravelDayFlight): string {
+  const iata = flight.flightArrivalAirport?.trim().toUpperCase() ?? "";
+  if (iata === "VCE") return "Venice";
+  return iata || "destination";
+}
+
+export function buildTravelDayHeadline(
+  trains: TrainTicketSourceReservation[],
+  flight: HomeTravelDayFlight | null,
+): string {
+  if (!flight) {
+    if (trains.length === 1) {
+      return `Travel day — ${trains[0]!.location?.trim() || "train"}`;
+    }
+    if (trains.length > 1) return "Travel day — multi-leg trains";
+    return "Travel day";
+  }
+
+  const arrival = formatTravelDayArrivalLabel(flight);
+  const departsBri = (flight.flightDepartureAirport?.trim().toUpperCase() ?? "") === "BRI";
+
+  if (departsBri && hasBariAirportRailConnector(trains)) {
+    return `Travel day — trains to Bari, then fly to ${arrival}`;
+  }
+  if (departsBri && trains.some((train) => trainEndsAtBari(train))) {
+    return `Travel day — train to Bari, then fly to ${arrival}`;
+  }
+  if (departsBri) {
+    return `Travel day — fly to ${arrival}`;
+  }
+
+  const from = flight.flightDepartureAirport?.trim() || "";
+  const to = flight.flightArrivalAirport?.trim() || "";
+  if (from && to) return `Travel day — ${from} → ${to}`;
+  return `Travel day — fly to ${arrival}`;
+}
+
+export function isBriAirportCoachStep(step: TravelDayWalkthroughStep): boolean {
+  return step.id.startsWith("bri-");
+}
+
 function formatPassengerTicketNote(handoff: TrainTicketHandoffContent | undefined): string | null {
   const tickets = handoff?.passengerTickets ?? [];
   if (tickets.length === 0) return null;
@@ -226,7 +281,9 @@ export function buildTravelDayWalkthroughSteps(input: {
     }
   });
 
-  const airportConnector = input.trains.find((train) => trainDepartsBariCentraleFnB(train));
+  const airportConnector =
+    input.trains.find((train) => trainDepartsBariCentraleFnB(train)) ??
+    input.trains.find((train) => trainArrivesBariAirport(train));
   if (airportConnector && flightFromBri) {
     const connectorHandoff = input.trainHandoffs.find(
       (handoff) => handoff.reservationId === airportConnector.id,
@@ -322,29 +379,15 @@ export function buildHomeTravelDayCoach(input: {
   const flight: HomeTravelDayFlight | null = flightPick
     ? composeTravelDayFlightView(flightPick)
     : null;
-  const primaryFlight = flightPick?.primary ?? null;
 
-  const hasTrainBeforeFlight = Boolean(primaryTrain && primaryFlight);
+  const hasTrainBeforeFlight = Boolean(primaryTrain && flight);
   const airportTransferHint = buildBriAirportTransferHint({
     trainArrivesBari: primaryTrain ? trainEndsAtBari(primaryTrain) : false,
     flightFromBri: (flight?.flightDepartureAirport?.trim().toUpperCase() ?? "") === "BRI",
   });
 
   const dayLabel = formatShortDayLabel(input.dateKey, input.timezone);
-  const headline = (() => {
-    if (primaryTrain && primaryFlight) {
-      const trainRoute = primaryTrain.location?.trim() || "your train";
-      const arr = primaryFlight.flightArrivalAirport?.trim() || "destination";
-      return `Travel day — ${trainRoute}, then fly to ${arr}`;
-    }
-    if (primaryTrain) return `Travel day — ${primaryTrain.location?.trim() || "train"}`;
-    if (primaryFlight) {
-      const from = primaryFlight.flightDepartureAirport?.trim() || "";
-      const to = primaryFlight.flightArrivalAirport?.trim() || "";
-      return from && to ? `Travel day — ${from} → ${to}` : "Travel day";
-    }
-    return "Travel day";
-  })();
+  const headline = buildTravelDayHeadline(trains, flight);
 
   const leadParts: string[] = [];
   for (const train of trains) leadParts.push(trainHeadline(train));
@@ -362,11 +405,13 @@ export function buildHomeTravelDayCoach(input: {
     return input.flightLeaveByHint ?? null;
   })();
 
-  const walkthroughSteps = buildTravelDayWalkthroughSteps({
+  const allWalkthroughSteps = buildTravelDayWalkthroughSteps({
     trains,
     trainHandoffs,
     flight,
   });
+  const briAirportCoachSteps = allWalkthroughSteps.filter(isBriAirportCoachStep);
+  const walkthroughSteps = allWalkthroughSteps.filter((step) => !isBriAirportCoachStep(step));
 
   return {
     dateKey: input.dateKey,
@@ -378,6 +423,7 @@ export function buildHomeTravelDayCoach(input: {
     leaveCue,
     airportTransferHint,
     hasTrainBeforeFlight,
+    briAirportCoachSteps,
     walkthroughSteps,
   };
 }
@@ -480,6 +526,7 @@ export function buildHomeFirstPaintLead(input: {
   const aboveFoldText = [
     coach.headline,
     coach.leadDetail,
+    ...coach.briAirportCoachSteps.map((step) => `${step.title} ${step.detail}`),
     ...coach.trainHandoffs.map((handoff) => `${handoff.headline} ${handoff.detail}`),
     ...coach.walkthroughSteps.map((step) => `${step.title} ${step.detail}`),
     nextFlightText ?? "",
