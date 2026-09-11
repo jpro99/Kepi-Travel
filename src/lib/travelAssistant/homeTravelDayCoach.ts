@@ -145,7 +145,7 @@ export function buildHomeTravelDayCoach(input: {
         flightArrivalAirport: primaryFlight.flightArrivalAirport,
         flightDepartureTime: primaryFlight.flightDepartureTime ?? primaryFlight.localTime,
         flightArrivalTime: primaryFlight.flightArrivalTime,
-        flightArrivalTerminal: (primaryFlight as { flightArrivalTerminal?: string }).flightArrivalTerminal,
+        flightArrivalTerminal: primaryFlight.flightArrivalTerminal,
         confirmationCode: primaryFlight.confirmationCode,
         provider: primaryFlight.provider,
       }
@@ -210,9 +210,9 @@ export function dayHasBookedTravelMoves(
   reservations: HomeStayReservation[],
   dateKey: string,
 ): boolean {
-  const trains = reservations.filter(isBookedTrainReservation).filter(
-    (row) => dateOnly(row.localTime) === dateKey,
-  );
+  const trains = reservations
+    .filter((row) => isBookedTrainReservation(row as TrainTicketSourceReservation))
+    .filter((row) => dateOnly(row.localTime) === dateKey);
   const flights = flightsOnDay(reservations, dateKey);
   return trains.length > 0 || flights.length > 0;
 }
