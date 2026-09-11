@@ -12,9 +12,14 @@ export function formatNamedPdfSection(filename: string, text: string): string {
   return `--- PDF: ${name} ---\n\n${trimmed}`;
 }
 
-export function extractNamedPdfSection(sourceText: string, passengerSlug: string): string | null {
+export function extractNamedPdfSection(
+  sourceText: string,
+  passengerSlug: string,
+  legSlug?: string,
+): string | null {
   const slug = passengerSlug.trim().toLowerCase();
   if (!slug) return null;
+  const leg = legSlug?.trim().toLowerCase() ?? "";
   const sections = sourceText.split(/(?=--- PDF: )/u);
   for (const section of sections) {
     const headerMatch = section.match(NAMED_PDF_SECTION_RE);
@@ -22,9 +27,31 @@ export function extractNamedPdfSection(sourceText: string, passengerSlug: string
     if (!filename) continue;
     const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/gu, "-");
     if (!normalized.includes(slug)) continue;
+    if (leg) {
+      const legNormalized = leg.replace(/[^a-z0-9]+/gu, "-");
+      if (!normalized.includes(legNormalized)) continue;
+    }
     return section.trim();
   }
   return null;
+}
+
+/** Append a named PDF section without duplicating the same passenger+leg header. */
+export function mergeNamedPdfSections(existing: string, section: string): string {
+  const trimmedSection = section.trim();
+  if (!trimmedSection) return existing.trim();
+  const headerMatch = trimmedSection.match(NAMED_PDF_SECTION_RE);
+  const header = headerMatch?.[1]?.trim() ?? "";
+  if (!header) {
+    const body = existing.trim();
+    return body ? `${body}\n\n${trimmedSection}` : trimmedSection;
+  }
+  const sections = existing.split(/(?=--- PDF: )/u).filter((part) => part.trim());
+  const withoutDup = sections.filter((part) => {
+    const match = part.match(NAMED_PDF_SECTION_RE);
+    return (match?.[1]?.trim() ?? "") !== header;
+  });
+  return [...withoutDup, trimmedSection].join("\n\n").trim();
 }
 
 export function extractPdfAttachmentSection(text: string): string {

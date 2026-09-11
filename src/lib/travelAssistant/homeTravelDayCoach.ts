@@ -27,6 +27,12 @@ import {
   type TrainTicketSourceReservation,
 } from "@/lib/travelAssistant/trainTicketHandoff";
 import { trainReservationsOnDayExpanded } from "@/lib/travelAssistant/travelDayTrainExpand";
+import {
+  hasStoredFlightBoardingPassesOnDay,
+  resolveFlightBoardingPassesForDay,
+  type FlightBoardingPassHandoffContent,
+} from "@/lib/travelAssistant/flightBoardingPassHandoff";
+import type { FlightBoardingPassSourceReservation } from "@/lib/travelAssistant/flightBoardingPassStored";
 
 export interface HomeTravelDayFlight {
   id: string;
@@ -53,6 +59,7 @@ export interface HomeTravelDayCoach {
   headline: string;
   leadDetail: string;
   trainHandoffs: TrainTicketHandoffContent[];
+  flightBoardingHandoffs: FlightBoardingPassHandoffContent[];
   flight: HomeTravelDayFlight | null;
   leaveCue: string | null;
   airportTransferHint: string | null;
@@ -84,7 +91,10 @@ function flightDepDay(reservation: HomeStayReservation): string {
   return canonicalFlightDepartureDay(reservation) || dateOnly(reservation.localTime);
 }
 
-function flightsOnDay(reservations: HomeStayReservation[], dateKey: string): HomeStayReservation[] {
+function flightsOnDay(
+  reservations: readonly HomeStayReservation[],
+  dateKey: string,
+): HomeStayReservation[] {
   return reservations
     .map(normalizeTravelDayFlightReservation)
     .filter(isBookedFlight)
@@ -346,7 +356,7 @@ export function resolveEffectiveTravelTimezone(
 }
 
 export function buildHomeTravelDayCoach(input: {
-  reservations: HomeStayReservation[];
+  reservations: readonly HomeStayReservation[];
   dateKey: string;
   timezone?: string | null;
   tripId?: string | null;
@@ -363,6 +373,11 @@ export function buildHomeTravelDayCoach(input: {
   const trainHandoffs = trains
     .map((train) => buildTrainTicketHandoffContent(train, input.tripId))
     .filter((content): content is TrainTicketHandoffContent => Boolean(content));
+
+  const flightBoardingHandoffs = resolveFlightBoardingPassesForDay(
+    input.reservations as FlightBoardingPassSourceReservation[],
+    input.dateKey,
+  );
 
   const primaryTrain = trains[0] ?? null;
   const lastTrain = trains[trains.length - 1] ?? null;
@@ -419,6 +434,7 @@ export function buildHomeTravelDayCoach(input: {
     headline,
     leadDetail,
     trainHandoffs,
+    flightBoardingHandoffs,
     flight,
     leaveCue,
     airportTransferHint,
@@ -442,7 +458,7 @@ export function dayHasBookedTravelMoves(
 
 /** Train + flight on the same calendar day — Sep 12 Bari→Venice travel-day pattern. */
 export function isTrainFlightTravelDayPattern(
-  reservations: HomeStayReservation[],
+  reservations: readonly HomeStayReservation[],
   dateKey: string,
 ): boolean {
   const trains = trainReservationsOnDayExpanded(
@@ -451,6 +467,30 @@ export function isTrainFlightTravelDayPattern(
   );
   if (trains.length === 0) return false;
   return flightsOnDay(reservations, dateKey).length > 0;
+}
+
+/**
+ * G57 — Day-of air travel Home for any IATA/airline when stored boarding passes exist.
+ * Partial leg ingest OK (e.g. FCO→VCE only until BRI→FCO is forwarded).
+ */
+export function isAirTravelDayWithStoredPasses(
+  reservations: readonly HomeStayReservation[],
+  dateKey: string,
+): boolean {
+  if (flightsOnDay(reservations, dateKey).length === 0) return false;
+  return hasStoredFlightBoardingPassesOnDay(
+    reservations as FlightBoardingPassSourceReservation[],
+    dateKey,
+  );
+}
+
+/** Train+flight travel day OR flight-only day with stored boarding-pass artifacts. */
+export function shouldActivateTravelDayCoach(
+  reservations: readonly HomeStayReservation[],
+  dateKey: string,
+): boolean {
+  if (isTrainFlightTravelDayPattern(reservations, dateKey)) return true;
+  return isAirTravelDayWithStoredPasses(reservations, dateKey);
 }
 
 export interface ActiveTravelDayCoachResult {
@@ -471,7 +511,7 @@ export function resolveActiveTravelDayCoach(input: {
   const timezone = resolveEffectiveTravelTimezone(input.reservations, input.timezone);
   const todayKey = travelerTodayKey(nowMs, timezone);
 
-  if (isTrainFlightTravelDayPattern(input.reservations, todayKey)) {
+  if (shouldActivateTravelDayCoach(input.reservations, todayKey)) {
     const coach = buildHomeTravelDayCoach({
       reservations: input.reservations,
       dateKey: todayKey,
@@ -483,7 +523,7 @@ export function resolveActiveTravelDayCoach(input: {
   }
 
   const tomorrowKey = addIsoDays(todayKey, 1);
-  if (isTrainFlightTravelDayPattern(input.reservations, tomorrowKey)) {
+  if (shouldActivateTravelDayCoach(input.reservations, tomorrowKey)) {
     const coach = buildHomeTravelDayCoach({
       reservations: input.reservations,
       dateKey: tomorrowKey,

@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-06 (F20 Plan City belt shipped on preview branch)
+Last updated: 2026-09-11 (G56 ITA boarding passes on Home travel day)
+
+## Decision 2026-09-11 — ITA boarding passes ingest + Home travel day (G56, Jeff URGENT)
+
+ITA boarding-pass emails/PDFs now ingest via trips forward (named PDF sections per passenger per leg, same model as Trenitalia). Home travel-day coach shows per-leg boarding-pass CTAs with Stephanie + Jeffery buttons (eve-before Sep 11 previews Sep 12). **Still requires forward to trips inbox:** BRI→FCO passes were only forwarded to Stephanie — re-forward both BRI→FCO boarding-pass emails to `jpro99-2@trips.kepitravel.com` so Kepi stores them. FCO→VCE was forwarded; BRI→FCO may be missing in prod until re-forwarded. Never invent gate/seat/flight numbers on Home — only stored email/PDF artifacts.
 
 ## Decision 2026-09-06 — Plan City belt (F20, Jeff BUILD)
 

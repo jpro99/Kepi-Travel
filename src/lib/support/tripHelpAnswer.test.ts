@@ -70,7 +70,9 @@ test("where am I uses active hotel on calendar today", () => {
   assert.match(answer!, /NEREA/i);
 });
 
-const BARI_VENICE_SEP_12: TripHelpReservation[] = [...BARI_VENICE_SEP_12_RESERVATIONS];
+const BARI_VENICE_SEP_12: TripHelpReservation[] = [
+  ...(BARI_VENICE_SEP_12_RESERVATIONS as TripHelpReservation[]),
+];
 
 test("G55: Sep 11 Help answers next travel day with Lecce→Bari train facts", () => {
   const answer = tryAnswerTripQuestion("What's my next travel day?", {

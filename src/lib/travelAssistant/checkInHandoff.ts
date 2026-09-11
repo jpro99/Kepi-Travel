@@ -7,6 +7,7 @@
  */
 
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
+import { reservationHasStoredBoardingPassArtifacts } from "@/lib/travelAssistant/flightBoardingPassStored";
 import {
   resolveBoardingPassUrl,
   type ReservationSourceLink,
@@ -219,7 +220,7 @@ export interface CheckInSourceReservation {
   flightNumber?: string;
   flightAirline?: string;
   provider?: string;
-  confirmationCode?: string;
+  confirmationCode?: string | null;
   flightDepartureAirport?: string;
   flightDepartureTime?: string;
   flightDate?: string;
@@ -246,13 +247,18 @@ export function resolveNextCheckInHandoff(
     .sort((a, b) => (a.departureUtcMs ?? 0) - (b.departureUtcMs ?? 0));
 
   for (const row of flights) {
+    // G57 — stored per-leg boarding passes own Home; never send traveler to airline site.
+    if (reservationHasStoredBoardingPassArtifacts(row.flight)) {
+      continue;
+    }
+
     const content = buildCheckInHandoffContent(
       {
         id: row.flight.id,
         flightNumber: row.flight.flightNumber,
         flightAirline: row.flight.flightAirline,
         provider: row.flight.provider,
-        confirmationCode: row.flight.confirmationCode,
+        confirmationCode: row.flight.confirmationCode ?? undefined,
         flightDepartureAirport: row.flight.flightDepartureAirport,
         departureUtcMs: row.departureUtcMs,
         boardingPassUrl:
