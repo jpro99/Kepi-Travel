@@ -35,12 +35,20 @@ export function normalizeTravelDayFlightReservation(row: HomeStayReservation): H
   };
 }
 
+function hasStoredFlightDepartureTime(reservation: HomeStayReservation): boolean {
+  const raw = reservation.flightDepartureTime ?? reservation.localTime ?? "";
+  return /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/u.test(raw.trim());
+}
+
 export function isBookedFlightReservation(reservation: HomeStayReservation): boolean {
   if ((reservation.type ?? "").toLowerCase() !== "flight") return false;
   if (reservation.plannedOnly === true) return false;
   if (reservation.flightDepartureAirport?.trim() || reservation.flightNumber?.trim()) return true;
   const fromTitle = parseAirportsFromRouteTitle(reservation.title ?? reservation.location);
-  return Boolean(fromTitle.dep && fromTitle.arr);
+  if (fromTitle.dep && fromTitle.arr) return true;
+  // Live ITA summary row: Z84T4Z with times but no segment flight number or route title.
+  if (reservation.confirmationCode?.trim() && hasStoredFlightDepartureTime(reservation)) return true;
+  return false;
 }
 
 function groupFlightsByConfirmation(

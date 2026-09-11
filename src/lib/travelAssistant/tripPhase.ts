@@ -28,9 +28,10 @@ import {
   selectTravelDayPrimaryFlightReservation,
 } from "@/lib/travelAssistant/travelDayFlightView";
 import {
-  trainReservationsOnDay,
   type TrainTicketSourceReservation,
 } from "@/lib/travelAssistant/trainTicketHandoff";
+import { trainReservationsOnDayExpanded } from "@/lib/travelAssistant/travelDayTrainExpand";
+import { resolveEffectiveTravelTimezone } from "@/lib/travelAssistant/homeTravelDayCoach";
 import { disruptionCalmHomeCopy } from "@/lib/travelAssistant/disruptionCalm";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import {
@@ -334,13 +335,13 @@ export function detectMissionPhase(
     return "problem";
   }
 
-  const travelerTimezone = input.travelerTimezone ?? null;
-  const todayKey =
-    travelerTimezone?.trim()
-      ? travelerTodayKey(nowMs, travelerTimezone)
-      : isoDayFromMs(nowMs);
+  const travelerTimezone = resolveEffectiveTravelTimezone(
+    reservations,
+    input.travelerTimezone ?? null,
+  );
+  const todayKey = travelerTodayKey(nowMs, travelerTimezone);
 
-  const todayTrains = trainReservationsOnDay(
+  const todayTrains = trainReservationsOnDayExpanded(
     reservations as TrainTicketSourceReservation[],
     todayKey,
   );
@@ -455,11 +456,11 @@ export function buildMissionControlSnapshot(
   const reservations = input.reservations ?? [];
   const phase = detectMissionPhase(input, nowMs);
   const stopRanges = input.stopRanges ?? [];
-  const travelerTimezone = input.travelerTimezone ?? null;
-  const todayKey =
-    phase === "at_destination" && travelerTimezone
-      ? travelerTodayKey(nowMs, travelerTimezone)
-      : isoDayFromMs(nowMs);
+  const travelerTimezone = resolveEffectiveTravelTimezone(
+    reservations,
+    input.travelerTimezone ?? null,
+  );
+  const todayKey = travelerTodayKey(nowMs, travelerTimezone);
   const gapReservations = reservations.map((r) => ({
     ...r,
     provider: r.provider ?? "",
@@ -532,7 +533,7 @@ export function buildMissionControlSnapshot(
 
   // F15 — one picker for Home TODAY / leave-by / check-in: earliest remaining booked segment.
   let nextFlight = selectNextRemainingFlight(reservations.filter(isBookedFlight), nowMs);
-  const todayTrains = trainReservationsOnDay(
+  const todayTrains = trainReservationsOnDayExpanded(
     reservations as TrainTicketSourceReservation[],
     todayKey,
   );

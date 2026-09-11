@@ -23,10 +23,10 @@ import {
 import {
   buildTrainTicketHandoffContent,
   isBookedTrainReservation,
-  trainReservationsOnDay,
   type TrainTicketHandoffContent,
   type TrainTicketSourceReservation,
 } from "@/lib/travelAssistant/trainTicketHandoff";
+import { trainReservationsOnDayExpanded } from "@/lib/travelAssistant/travelDayTrainExpand";
 
 export interface HomeTravelDayFlight {
   id: string;
@@ -269,6 +269,25 @@ export function buildTravelDayWalkthroughSteps(input: {
   return steps;
 }
 
+export function inferTravelerTimezoneFromReservations(
+  reservations: readonly HomeStayReservation[],
+): string | null {
+  for (const row of reservations) {
+    const tz = row.timezone?.trim();
+    if (tz && tz !== "UTC" && tz !== "Etc/UTC") return tz;
+  }
+  return null;
+}
+
+export function resolveEffectiveTravelTimezone(
+  reservations: readonly HomeStayReservation[],
+  travelerTimezone?: string | null,
+): string | null {
+  const explicit = travelerTimezone?.trim();
+  if (explicit && explicit !== "UTC" && explicit !== "Etc/UTC") return explicit;
+  return inferTravelerTimezoneFromReservations(reservations);
+}
+
 export function buildHomeTravelDayCoach(input: {
   reservations: HomeStayReservation[];
   dateKey: string;
@@ -276,7 +295,7 @@ export function buildHomeTravelDayCoach(input: {
   tripId?: string | null;
   flightLeaveByHint?: string | null;
 }): HomeTravelDayCoach | null {
-  const trains = trainReservationsOnDay(
+  const trains = trainReservationsOnDayExpanded(
     input.reservations as TrainTicketSourceReservation[],
     input.dateKey,
   );
@@ -380,12 +399,98 @@ export function isTrainFlightTravelDayPattern(
   reservations: HomeStayReservation[],
   dateKey: string,
 ): boolean {
-  const trains = trainReservationsOnDay(
+  const trains = trainReservationsOnDayExpanded(
     reservations as TrainTicketSourceReservation[],
     dateKey,
   );
   if (trains.length === 0) return false;
   return flightsOnDay(reservations, dateKey).length > 0;
+}
+
+export interface ActiveTravelDayCoachResult {
+  coach: HomeTravelDayCoach;
+  mode: "today" | "tomorrow";
+  dateKey: string;
+}
+
+/** Today travel-day coach, or tomorrow's when eve-before (suppresses Lecce mid-stay lead). */
+export function resolveActiveTravelDayCoach(input: {
+  reservations: HomeStayReservation[];
+  nowMs?: number;
+  timezone?: string | null;
+  tripId?: string | null;
+  flightLeaveByHint?: string | null;
+}): ActiveTravelDayCoachResult | null {
+  const nowMs = input.nowMs ?? Date.now();
+  const timezone = resolveEffectiveTravelTimezone(input.reservations, input.timezone);
+  const todayKey = travelerTodayKey(nowMs, timezone);
+
+  if (isTrainFlightTravelDayPattern(input.reservations, todayKey)) {
+    const coach = buildHomeTravelDayCoach({
+      reservations: input.reservations,
+      dateKey: todayKey,
+      timezone,
+      tripId: input.tripId,
+      flightLeaveByHint: input.flightLeaveByHint,
+    });
+    if (coach) return { coach, mode: "today", dateKey: todayKey };
+  }
+
+  const tomorrowKey = addIsoDays(todayKey, 1);
+  if (isTrainFlightTravelDayPattern(input.reservations, tomorrowKey)) {
+    const coach = buildHomeTravelDayCoach({
+      reservations: input.reservations,
+      dateKey: tomorrowKey,
+      timezone,
+      tripId: input.tripId,
+      flightLeaveByHint: input.flightLeaveByHint,
+    });
+    if (coach) return { coach, mode: "tomorrow", dateKey: tomorrowKey };
+  }
+
+  return null;
+}
+
+/** Above-fold Home lead text for regression tests — mirrors Mission Control travel-day hero. */
+export function buildHomeFirstPaintLead(input: {
+  reservations: HomeStayReservation[];
+  nowMs?: number;
+  timezone?: string | null;
+  tripId?: string | null;
+  flightLeaveByHint?: string | null;
+}): {
+  headline: string;
+  summary: string;
+  nextFlightText: string | null;
+  aboveFoldText: string;
+  travelDayLead: boolean;
+} {
+  const active = resolveActiveTravelDayCoach(input);
+  if (!active) {
+    return {
+      headline: "",
+      summary: "",
+      nextFlightText: null,
+      aboveFoldText: "",
+      travelDayLead: false,
+    };
+  }
+  const { coach } = active;
+  const nextFlightText = coach.flight ? formatTravelDayFlightLead(coach.flight) : null;
+  const aboveFoldText = [
+    coach.headline,
+    coach.leadDetail,
+    ...coach.trainHandoffs.map((handoff) => `${handoff.headline} ${handoff.detail}`),
+    ...coach.walkthroughSteps.map((step) => `${step.title} ${step.detail}`),
+    nextFlightText ?? "",
+  ].join(" ");
+  return {
+    headline: coach.headline,
+    summary: `${coach.dayLabel} — ${coach.leadDetail}`,
+    nextFlightText,
+    aboveFoldText,
+    travelDayLead: true,
+  };
 }
 
 export function resolveTodayTravelDayCoach(input: {
@@ -414,11 +519,7 @@ export function hasActiveTravelDayCoach(input: {
   tripId?: string | null;
   flightLeaveByHint?: string | null;
 }): boolean {
-  const nowMs = input.nowMs ?? Date.now();
-  const dateKey = travelerTodayKey(nowMs, input.timezone ?? null);
-  if (!isTrainFlightTravelDayPattern(input.reservations, dateKey)) return false;
-  const coach = resolveTodayTravelDayCoach({ ...input, nowMs });
-  return coach != null;
+  return resolveActiveTravelDayCoach(input) != null;
 }
 
 /** Eve-before preview: tomorrow is a multi-segment travel day. */

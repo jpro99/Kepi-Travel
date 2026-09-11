@@ -5,16 +5,19 @@ import {
   BARI_VENICE_TRIP_ID,
 } from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
 import {
+  buildHomeFirstPaintLead,
   formatTravelDayFlightLead,
   hasActiveTravelDayCoach,
   resolveTodayTravelDayCoach,
 } from "@/lib/travelAssistant/homeTravelDayCoach";
+import { trainReservationsOnDayExpanded } from "@/lib/travelAssistant/travelDayTrainExpand";
 import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
 import {
   composeTravelDayFlightView,
   selectTravelDayPrimaryFlightReservation,
 } from "@/lib/travelAssistant/travelDayFlightView";
 
+const SEP_11_ROME_EVENING = Date.parse("2026-09-11T18:00:00Z");
 const SEP_12_MORNING = Date.parse("2026-09-12T07:00:00Z");
 
 /** Live-shaped Z84T4Z: connector legs + optional route-only summary row — no invented AZ1464. */
@@ -137,6 +140,89 @@ test("live-shaped Sep 12: travel-day coach leads with gospel flight lead and hid
   assert.match(lead, /VCE T1/i);
   assert.doesNotMatch(lead, /AZ1616/i);
   assert.doesNotMatch(lead, /FCO/i);
+});
+
+const LIVE_ITA_SUMMARY_ONLY = {
+  id: "z84-summary-only",
+  type: "flight",
+  title: "ITA Airways",
+  provider: "ITA Airways",
+  confirmationCode: "Z84T4Z",
+  localTime: "2026-09-12 15:20",
+  timezone: "Europe/Rome",
+  flightDepartureTime: "2026-09-12 15:20",
+  flightArrivalTime: "2026-09-12 18:25",
+  flightArrivalTerminal: "1",
+  flightConnectionStops: 1,
+  flightDate: "2026-09-12",
+} as const;
+
+function liveFullTripReservations(includeSummary = true) {
+  const hotelsAndTrains = BARI_VENICE_SEP_12_RESERVATIONS.filter(
+    (row) => row.type === "hotel" || row.type === "train",
+  );
+  const flights = includeSummary
+    ? [...LIVE_Z84T4Z_CONNECTOR_LEGS, LIVE_GOSPEL_SUMMARY_LEG]
+    : [...LIVE_Z84T4Z_CONNECTOR_LEGS];
+  return [...hotelsAndTrains, ...flights];
+}
+
+test("live ITA summary row without route title still counts as booked BRI→VCE flight", () => {
+  const reservations = [
+    ...BARI_VENICE_SEP_12_RESERVATIONS.filter((row) => row.type === "train"),
+    LIVE_ITA_SUMMARY_ONLY,
+  ];
+  assert.equal(
+    hasActiveTravelDayCoach({
+      reservations,
+      nowMs: SEP_12_MORNING,
+      timezone: "Europe/Rome",
+      tripId: BARI_VENICE_TRIP_ID,
+    }),
+    true,
+  );
+});
+
+test("single train reservation expands Reg 91312 from stored J7HBM5 PDF", () => {
+  const singleTrain = BARI_VENICE_SEP_12_RESERVATIONS.filter((row) => row.id === "train-fa8312-lecce-bari");
+  const expanded = trainReservationsOnDayExpanded(singleTrain, "2026-09-12");
+  assert.equal(expanded.length, 2);
+  assert.match(expanded[1]?.trainNumber ?? "", /91312/);
+});
+
+test("first-paint Sep 12 live-shaped: gospel coach — not Lecce mid-stay or AZ1616", () => {
+  const paint = buildHomeFirstPaintLead({
+    reservations: liveFullTripReservations(true),
+    nowMs: SEP_12_MORNING,
+    timezone: null,
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.equal(paint.travelDayLead, true);
+  assert.doesNotMatch(paint.headline, /You're in Lecce/i);
+  assert.doesNotMatch(paint.aboveFoldText, /AZ1616/i);
+  assert.match(paint.aboveFoldText, /8312/i);
+  assert.match(paint.aboveFoldText, /91312/i);
+  assert.match(paint.aboveFoldText, /Z84T4Z/i);
+  assert.match(paint.aboveFoldText, /tunnel/i);
+  assert.match(paint.aboveFoldText, /isole A\/B/i);
+  assert.equal(
+    paint.nextFlightText,
+    "Confirmation Z84T4Z · BRI → VCE · 3:20 PM–6:25 PM · 1 stop · VCE T1",
+  );
+});
+
+test("first-paint Sep 11 eve: tomorrow travel-day coach leads — not Lecce / AZ1616", () => {
+  const paint = buildHomeFirstPaintLead({
+    reservations: liveFullTripReservations(true),
+    nowMs: SEP_11_ROME_EVENING,
+    timezone: null,
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.equal(paint.travelDayLead, true);
+  assert.doesNotMatch(paint.headline, /You're in Lecce/i);
+  assert.doesNotMatch(paint.aboveFoldText, /AZ1616/i);
+  assert.match(paint.aboveFoldText, /91312/i);
+  assert.match(paint.aboveFoldText, /Z84T4Z/i);
 });
 
 test("live-shaped Z84T4Z without summary leg still composes BRI→VCE from connector chain", () => {

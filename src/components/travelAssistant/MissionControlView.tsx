@@ -57,11 +57,10 @@ import {
 } from "@/lib/travelAssistant/homeTodayCoach";
 import {
   formatTravelDayFlightLead,
-  hasActiveTravelDayCoach,
   homeTravelDayCoachNextAction,
   isTrainFlightTravelDayPattern,
-  resolveTodayTravelDayCoach,
-  resolveTomorrowTravelDayCoach,
+  resolveActiveTravelDayCoach,
+  resolveEffectiveTravelTimezone,
 } from "@/lib/travelAssistant/homeTravelDayCoach";
 import {
   resolveTrainTicketsForDay,
@@ -469,37 +468,31 @@ export function MissionControlView({
     [travelerTimezone, snap.tonightHotel?.timezone],
   );
 
-  const travelDayTimezone = travelerTimezone ?? snap.tonightHotel?.timezone ?? null;
-
-  const travelDayLead = useMemo(
-    () =>
-      showTravelOps &&
-      hasActiveTravelDayCoach({
-        reservations,
-        timezone: travelDayTimezone,
-        tripId,
-        flightLeaveByHint: snap.leaveByHint,
-      }),
-    [showTravelOps, reservations, travelDayTimezone, tripId, snap.leaveByHint],
+  const travelDayTimezone = resolveEffectiveTravelTimezone(
+    reservations,
+    travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
   );
 
-  const travelDayCoach = useMemo(() => {
-    if (!travelDayLead) return null;
+  const activeTravelDay = useMemo(() => {
+    if (!showTravelOps) return null;
     if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
-    return resolveTodayTravelDayCoach({
+    return resolveActiveTravelDayCoach({
       reservations,
       timezone: travelDayTimezone,
       tripId,
       flightLeaveByHint: snap.leaveByHint,
     });
   }, [
-    travelDayLead,
-    snap.leaveByHint,
+    showTravelOps,
     journeyPhase?.kind,
     reservations,
     travelDayTimezone,
     tripId,
+    snap.leaveByHint,
   ]);
+
+  const travelDayLead = Boolean(activeTravelDay);
+  const travelDayCoach = activeTravelDay?.coach ?? null;
 
   const effectiveNextFlight = useMemo(() => {
     if (travelDayCoach?.flight?.id) {
@@ -534,24 +527,6 @@ export function MissionControlView({
     reservations,
     travelDayTimezone,
     snap.nextFlight,
-  ]);
-
-  const tomorrowTravelDayCoach = useMemo(() => {
-    if (!showTravelOps || snap.phase !== "at_destination") return null;
-    if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
-    return resolveTomorrowTravelDayCoach({
-      reservations,
-      timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
-      tripId,
-    });
-  }, [
-    showTravelOps,
-    snap.phase,
-    journeyPhase?.kind,
-    reservations,
-    travelerTimezone,
-    snap.tonightHotel,
-    tripId,
   ]);
 
   const todayCoach = useMemo(() => {
@@ -658,7 +633,6 @@ export function MissionControlView({
       todayCoach?.leaveCue,
     ],
   );
-  const eveBeforeTravelDayLead = Boolean(tomorrowTravelDayCoach && todayCoach?.nextTravelMove);
   const travelTakeover =
     !travelDayLead &&
     journeyPhase != null &&
@@ -818,7 +792,7 @@ export function MissionControlView({
     zoom === "today" ? snap.today.status : zoom === "week" ? weekStatus(snap.week) : snap.tripStatus;
   const stayCoachLead =
     !travelDayLead &&
-    (eveBeforeTravelDayLead || Boolean(todayCoach)) &&
+    Boolean(todayCoach) &&
     zoom === "today" &&
     showTravelOps &&
     !prepMode;
