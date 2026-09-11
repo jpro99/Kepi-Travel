@@ -276,6 +276,7 @@ import { ConsumerSectionIcon } from "@/components/travelAssistant/ConsumerSectio
 import { EMPTY_HOME_CARD_CLASS } from "@/lib/travelAssistant/consumerVisualChrome";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import { TravelAskPanel } from "@/components/travelAssistant/TravelAskPanel";
+import { hasActiveTravelDayCoach } from "@/lib/travelAssistant/homeTravelDayCoach";
 import {
   TravelStyleBadge,
   TravelStyleQuiz,
@@ -4812,6 +4813,15 @@ export default function TravelAssistantPage() {
     }
     return null;
   }, [consumerReservationsSorted]);
+  const travelDayHomeLead = useMemo(
+    () =>
+      hasActiveTravelDayCoach({
+        reservations: consumerReservationsSorted,
+        timezone: travelerTimezoneForHome,
+        tripId: activeTripId,
+      }),
+    [consumerReservationsSorted, travelerTimezoneForHome, activeTripId],
+  );
   const derivedTripStartDate = useMemo(() => {
     const flightDays = consumerReservationsSorted
       .filter((reservation) => reservation.type === "flight")
@@ -11004,13 +11014,15 @@ export default function TravelAssistantPage() {
             </section>
           ) : (
             <section className="space-y-3">
-              <TravelAskPanel
-                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
-                tripName={activeTrip?.name ?? null}
-                startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
-                endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
-                variant="embedded"
-              />
+              {!travelDayHomeLead ? (
+                <TravelAskPanel
+                  destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                  tripName={activeTrip?.name ?? null}
+                  startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+                  endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
+                  variant="embedded"
+                />
+              ) : null}
 
               {activeTrip && readinessItems.length > 0 ? (
                 <TripReadinessChecklistSection

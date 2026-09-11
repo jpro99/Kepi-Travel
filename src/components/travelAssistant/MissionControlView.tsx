@@ -57,7 +57,9 @@ import {
 } from "@/lib/travelAssistant/homeTodayCoach";
 import {
   formatTravelDayFlightLead,
+  hasActiveTravelDayCoach,
   homeTravelDayCoachNextAction,
+  isTrainFlightTravelDayPattern,
   resolveTodayTravelDayCoach,
   resolveTomorrowTravelDayCoach,
 } from "@/lib/travelAssistant/homeTravelDayCoach";
@@ -467,35 +469,72 @@ export function MissionControlView({
     [travelerTimezone, snap.tonightHotel?.timezone],
   );
 
+  const travelDayTimezone = travelerTimezone ?? snap.tonightHotel?.timezone ?? null;
+
+  const travelDayLead = useMemo(
+    () =>
+      showTravelOps &&
+      hasActiveTravelDayCoach({
+        reservations,
+        timezone: travelDayTimezone,
+        tripId,
+        flightLeaveByHint: snap.leaveByHint,
+      }),
+    [showTravelOps, reservations, travelDayTimezone, tripId, snap.leaveByHint],
+  );
+
   const travelDayCoach = useMemo(() => {
-    if (!showTravelOps) return null;
+    if (!travelDayLead) return null;
     if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
-    const coach = resolveTodayTravelDayCoach({
+    return resolveTodayTravelDayCoach({
       reservations,
-      timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+      timezone: travelDayTimezone,
       tripId,
       flightLeaveByHint: snap.leaveByHint,
     });
-    if (!coach) return null;
-    if (coach.trainHandoffs.length === 0 && !coach.flight) return null;
-    return coach;
   }, [
-    showTravelOps,
+    travelDayLead,
     snap.leaveByHint,
     journeyPhase?.kind,
     reservations,
-    travelerTimezone,
-    snap.tonightHotel,
+    travelDayTimezone,
     tripId,
   ]);
 
   const effectiveNextFlight = useMemo(() => {
     if (travelDayCoach?.flight?.id) {
       const booked = reservations.find((row) => row.id === travelDayCoach.flight!.id);
-      if (booked) return booked;
+      if (booked) {
+        return {
+          ...booked,
+          flightNumber: travelDayCoach.flight.flightNumber,
+          flightDepartureAirport: travelDayCoach.flight.flightDepartureAirport,
+          flightArrivalAirport: travelDayCoach.flight.flightArrivalAirport,
+          flightDepartureTime: travelDayCoach.flight.flightDepartureTime,
+          flightArrivalTime: travelDayCoach.flight.flightArrivalTime,
+          flightArrivalTerminal: travelDayCoach.flight.flightArrivalTerminal,
+          confirmationCode: travelDayCoach.flight.confirmationCode ?? booked.confirmationCode,
+        };
+      }
+    }
+    if (
+      travelDayLead &&
+      isTrainFlightTravelDayPattern(
+        reservations,
+        travelerTodayKey(Date.now(), travelDayTimezone),
+      ) &&
+      snap.nextFlight
+    ) {
+      return snap.nextFlight;
     }
     return snap.nextFlight;
-  }, [travelDayCoach?.flight?.id, reservations, snap.nextFlight]);
+  }, [
+    travelDayCoach?.flight,
+    travelDayLead,
+    reservations,
+    travelDayTimezone,
+    snap.nextFlight,
+  ]);
 
   const tomorrowTravelDayCoach = useMemo(() => {
     if (!showTravelOps || snap.phase !== "at_destination") return null;
@@ -619,7 +658,6 @@ export function MissionControlView({
       todayCoach?.leaveCue,
     ],
   );
-  const travelDayLead = Boolean(travelDayCoach);
   const eveBeforeTravelDayLead = Boolean(tomorrowTravelDayCoach && todayCoach?.nextTravelMove);
   const travelTakeover =
     !travelDayLead &&
@@ -779,7 +817,8 @@ export function MissionControlView({
   const activeStatus =
     zoom === "today" ? snap.today.status : zoom === "week" ? weekStatus(snap.week) : snap.tripStatus;
   const stayCoachLead =
-    (travelDayLead || eveBeforeTravelDayLead || todayCoach) &&
+    !travelDayLead &&
+    (eveBeforeTravelDayLead || Boolean(todayCoach)) &&
     zoom === "today" &&
     showTravelOps &&
     !prepMode;
@@ -1155,9 +1194,18 @@ export function MissionControlView({
             <p className="text-[13px] font-semibold text-[#6E6E73]">
               {stayCoachLead ? "Next flight" : "Next flight"}
             </p>
-            <p className="mt-0.5 text-[16px] font-semibold text-[#1D1D1F]">
-              {effectiveNextFlight.flightNumber || "Flight"} ·{" "}
-              {effectiveNextFlight.flightDepartureAirport} → {effectiveNextFlight.flightArrivalAirport}
+            <p className="mt-0.5 text-[16px] font-semibold leading-snug text-[#1D1D1F]">
+              {travelDayCoach?.flight
+                ? formatTravelDayFlightLead(travelDayCoach.flight)
+                : [
+                    effectiveNextFlight.flightNumber,
+                    effectiveNextFlight.flightDepartureAirport &&
+                      effectiveNextFlight.flightArrivalAirport
+                      ? `${effectiveNextFlight.flightDepartureAirport} → ${effectiveNextFlight.flightArrivalAirport}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "Flight"}
             </p>
             <p className="mt-1 text-[14px] text-[#007AFF]">
               {formatFlightStatusTrustLine({

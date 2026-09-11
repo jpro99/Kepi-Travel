@@ -4,10 +4,13 @@
  */
 
 import { buildBriAfterTrainCoachSteps } from "@/lib/travelAssistant/briAirportFacts";
+import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 import {
-  flightDepartureUtcMs,
-  selectTravelDayPrimaryFlight,
-} from "@/lib/travelAssistant/flightSort";
+  composeTravelDayFlightView,
+  isBookedFlightReservation,
+  normalizeTravelDayFlightReservation,
+  selectTravelDayPrimaryFlightReservation,
+} from "@/lib/travelAssistant/travelDayFlightView";
 import { canonicalFlightDepartureDay } from "@/lib/travelAssistant/tripWindow";
 import type { HomeNextAction } from "@/lib/travelAssistant/homeNextAction";
 import {
@@ -72,9 +75,7 @@ function formatShortDayLabel(dateKey: string, timezone?: string | null): string 
 }
 
 function isBookedFlight(reservation: HomeStayReservation): boolean {
-  if ((reservation.type ?? "").toLowerCase() !== "flight") return false;
-  if (reservation.plannedOnly === true) return false;
-  return Boolean(reservation.flightDepartureAirport || reservation.flightNumber);
+  return isBookedFlightReservation(reservation);
 }
 
 function flightDepDay(reservation: HomeStayReservation): string {
@@ -83,6 +84,7 @@ function flightDepDay(reservation: HomeStayReservation): string {
 
 function flightsOnDay(reservations: HomeStayReservation[], dateKey: string): HomeStayReservation[] {
   return reservations
+    .map(normalizeTravelDayFlightReservation)
     .filter(isBookedFlight)
     .filter((row) => flightDepDay(row) === dateKey)
     .sort((a, b) => (a.flightDepartureTime ?? a.localTime ?? "").localeCompare(b.flightDepartureTime ?? b.localTime ?? ""));
@@ -295,26 +297,13 @@ export function buildHomeTravelDayCoach(input: {
         flightDepartureTime: lastTrain.localTime,
       })
     : null;
-  const primaryFlight = (
-    selectTravelDayPrimaryFlight(flights, { afterTrainDepartureUtcMs: lastTrainDepartureUtcMs }) ??
-    flights[0] ??
-    null
-  ) as HomeStayReservation | null;
-
-  const flight: HomeTravelDayFlight | null = primaryFlight
-    ? {
-        id: primaryFlight.id,
-        flightNumber: primaryFlight.flightNumber,
-        flightDepartureAirport: primaryFlight.flightDepartureAirport,
-        flightArrivalAirport: primaryFlight.flightArrivalAirport,
-        flightDepartureTime: primaryFlight.flightDepartureTime ?? primaryFlight.localTime,
-        flightArrivalTime: primaryFlight.flightArrivalTime,
-        flightArrivalTerminal: primaryFlight.flightArrivalTerminal,
-        flightConnectionStops: primaryFlight.flightConnectionStops,
-        confirmationCode: primaryFlight.confirmationCode,
-        provider: primaryFlight.provider,
-      }
+  const flightPick = selectTravelDayPrimaryFlightReservation(flights, {
+    afterTrainDepartureUtcMs: lastTrainDepartureUtcMs,
+  });
+  const flight: HomeTravelDayFlight | null = flightPick
+    ? composeTravelDayFlightView(flightPick)
     : null;
+  const primaryFlight = flightPick?.primary ?? null;
 
   const hasTrainBeforeFlight = Boolean(primaryTrain && primaryFlight);
   const airportTransferHint = buildBriAirportTransferHint({
@@ -386,6 +375,19 @@ export function dayHasBookedTravelMoves(
   return trains.length > 0 || flights.length > 0;
 }
 
+/** Train + flight on the same calendar day — Sep 12 Bari→Venice travel-day pattern. */
+export function isTrainFlightTravelDayPattern(
+  reservations: HomeStayReservation[],
+  dateKey: string,
+): boolean {
+  const trains = trainReservationsOnDay(
+    reservations as TrainTicketSourceReservation[],
+    dateKey,
+  );
+  if (trains.length === 0) return false;
+  return flightsOnDay(reservations, dateKey).length > 0;
+}
+
 export function resolveTodayTravelDayCoach(input: {
   reservations: HomeStayReservation[];
   nowMs?: number;
@@ -412,9 +414,11 @@ export function hasActiveTravelDayCoach(input: {
   tripId?: string | null;
   flightLeaveByHint?: string | null;
 }): boolean {
-  const coach = resolveTodayTravelDayCoach(input);
-  if (!coach) return false;
-  return coach.trainHandoffs.length > 0 || coach.flight != null;
+  const nowMs = input.nowMs ?? Date.now();
+  const dateKey = travelerTodayKey(nowMs, input.timezone ?? null);
+  if (!isTrainFlightTravelDayPattern(input.reservations, dateKey)) return false;
+  const coach = resolveTodayTravelDayCoach({ ...input, nowMs });
+  return coach != null;
 }
 
 /** Eve-before preview: tomorrow is a multi-segment travel day. */

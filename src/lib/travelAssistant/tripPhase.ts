@@ -19,9 +19,14 @@ import {
   departureTimezoneForFlight,
   flightDepartureUtcMs,
   selectNextRemainingFlight,
-  selectTravelDayPrimaryFlight,
   sortFlightsByDeparture,
 } from "@/lib/travelAssistant/flightSort";
+import {
+  isBookedFlightReservation,
+  mergeTravelDayFlightReservation,
+  normalizeTravelDayFlightReservation,
+  selectTravelDayPrimaryFlightReservation,
+} from "@/lib/travelAssistant/travelDayFlightView";
 import {
   trainReservationsOnDay,
   type TrainTicketSourceReservation,
@@ -65,6 +70,7 @@ export interface MissionControlReservation {
   flightArrivalAirport?: string;
   flightDepartureTerminal?: string;
   flightArrivalTerminal?: string;
+  flightConnectionStops?: number;
   /** Confirmation / last-saved gate. Empty + live gate is assignment, not a change (G26). */
   flightDepartureGate?: string;
   checkOutDate?: string;
@@ -157,7 +163,17 @@ function hasTime(localTime: string | undefined | null): boolean {
 }
 
 function isBookedFlight(r: MissionControlReservation): boolean {
-  return r.type === "flight" && r.plannedOnly !== true;
+  return isBookedFlightReservation(r);
+}
+
+function flightsOnTravelDay(
+  reservations: MissionControlReservation[],
+  dateKey: string,
+): MissionControlReservation[] {
+  return reservations
+    .map((row) => normalizeTravelDayFlightReservation(row))
+    .filter(isBookedFlight)
+    .filter((row) => flightDepDay(row) === dateKey);
 }
 
 function isBookedHotel(r: MissionControlReservation): boolean {
@@ -328,9 +344,7 @@ export function detectMissionPhase(
     reservations as TrainTicketSourceReservation[],
     todayKey,
   );
-  const todayFlights = reservations
-    .filter(isBookedFlight)
-    .filter((f) => flightDepDay(f) === todayKey);
+  const todayFlights = flightsOnTravelDay(reservations, todayKey);
   if (todayTrains.length > 0 && todayFlights.length > 0) {
     return "departure_day";
   }
@@ -522,9 +536,7 @@ export function buildMissionControlSnapshot(
     reservations as TrainTicketSourceReservation[],
     todayKey,
   );
-  const todayFlights = reservations
-    .filter(isBookedFlight)
-    .filter((f) => flightDepDay(f) === todayKey);
+  const todayFlights = flightsOnTravelDay(reservations, todayKey);
   if (todayTrains.length > 0 && todayFlights.length > 0) {
     const lastTrain = todayTrains[todayTrains.length - 1];
     const lastTrainDepMs = lastTrain
@@ -534,10 +546,10 @@ export function buildMissionControlSnapshot(
           flightDepartureTime: lastTrain.localTime,
         })
       : null;
-    const primary = selectTravelDayPrimaryFlight(todayFlights, {
+    const pick = selectTravelDayPrimaryFlightReservation(todayFlights, {
       afterTrainDepartureUtcMs: lastTrainDepMs,
-    }) as MissionControlReservation | null;
-    if (primary) nextFlight = primary;
+    });
+    if (pick) nextFlight = mergeTravelDayFlightReservation(pick);
   }
 
   const leaveByHint =
