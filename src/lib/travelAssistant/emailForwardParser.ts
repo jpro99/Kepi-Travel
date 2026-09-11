@@ -10,7 +10,7 @@ import { formatFewShotBlock } from "@/lib/travelAssistant/mlReadiness/fewShotExa
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
 import type { FewShotParseExample } from "@/lib/travelAssistant/mlReadiness/types";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
-import { extractRailTicketFacts } from "@/lib/travelAssistant/railTicketExtract";
+import { extractRailTicketFacts, extractRailTicketLegs, type RailTicketFacts } from "@/lib/travelAssistant/railTicketExtract";
 import { extractActivityTicketFacts, stripLegalBoilerplate } from "@/lib/travelAssistant/activityTicketExtract";
 import { logger } from "@/lib/logger";
 
@@ -202,7 +202,8 @@ export type ForwardedReservationField =
   | "departureAirport"
   | "arrivalAirport"
   | "arrivalTime"
-  | "checkOutDate";
+  | "checkOutDate"
+  | "trainNumber";
 export type ForwardedParsingStatus = "auto-parsed" | "needs-review" | "needs-user-input";
 export type ForwardedConfidenceLevel = "high" | "medium" | "low";
 
@@ -234,6 +235,7 @@ export interface ForwardedReservationDraft {
   departureAirport?: string;
   arrivalAirport?: string;
   arrivalTime?: string;
+  trainNumber?: string;
 }
 
 export interface ForwardedEmailParseResult {
@@ -1429,6 +1431,9 @@ function buildRegexCandidates(input: {
     if (railFacts.notes) {
       candidates.notes = { value: railFacts.notes, confidence: 0.7, source: "regex" };
     }
+    if (railFacts.trainNumber) {
+      candidates.trainNumber = { value: railFacts.trainNumber, confidence: 0.9, source: "regex" };
+    }
   }
 
   const reservationType = normalizeType(candidates.type?.value ?? "") ?? undefined;
@@ -1679,6 +1684,10 @@ export function buildDraft(candidates: CandidateMap, parserNotes: string[]): For
       typeValue === "hotel"
         ? normalizeWhitespace(candidates.checkOutDate?.value ?? "")
         : "",
+    trainNumber:
+      typeValue === "train"
+        ? normalizeWhitespace(candidates.trainNumber?.value ?? "")
+        : "",
   };
 }
 
@@ -1772,6 +1781,21 @@ export function assessForwardedDraft(
   };
 }
 
+function railLegToCandidateMap(facts: RailTicketFacts): CandidateMap {
+  const map: CandidateMap = {
+    type: { value: "train", confidence: 0.9, source: "regex" },
+    title: { value: facts.title, confidence: 0.88, source: "regex" },
+    provider: { value: facts.provider, confidence: 0.86, source: "regex" },
+    localTime: { value: facts.localTime, confidence: 0.9, source: "regex" },
+    location: { value: facts.location, confidence: 0.88, source: "regex" },
+    confirmationCode: { value: facts.confirmationCode, confidence: 0.86, source: "regex" },
+    timezone: { value: facts.timezone, confidence: 0.8, source: "regex" },
+    notes: { value: facts.notes, confidence: 0.7, source: "regex" },
+    trainNumber: { value: facts.trainNumber, confidence: 0.9, source: "regex" },
+  };
+  return map;
+}
+
 function draftIdentityKey(draft: ForwardedReservationDraft): string {
   if (draft.type === "flight") {
     return [
@@ -1780,6 +1804,15 @@ function draftIdentityKey(draft: ForwardedReservationDraft): string {
       (draft.departureAirport ?? "").trim().toUpperCase(),
       (draft.arrivalAirport ?? "").trim().toUpperCase(),
       draft.localTime.trim().toLowerCase(),
+    ].join("|");
+  }
+  if (draft.type === "train" && (draft.trainNumber ?? "").trim()) {
+    return [
+      "train",
+      (draft.trainNumber ?? "").trim(),
+      draft.localTime.trim().toLowerCase(),
+      draft.location.trim().toLowerCase(),
+      draft.confirmationCode.trim().toLowerCase(),
     ].join("|");
   }
   return [
@@ -1805,6 +1838,7 @@ function draftRichness(draft: ForwardedReservationDraft): number {
 
 function dedupeDrafts(drafts: ForwardedReservationDraft[]): ForwardedReservationDraft[] {
   const flightByNumber = new Map<string, ForwardedReservationDraft>();
+  const trainByNumber = new Map<string, ForwardedReservationDraft>();
   const output: ForwardedReservationDraft[] = [];
   const seen = new Set<string>();
 
@@ -1817,6 +1851,14 @@ function dedupeDrafts(drafts: ForwardedReservationDraft[]): ForwardedReservation
       }
       continue;
     }
+    if (draft.type === "train" && draft.trainNumber?.trim()) {
+      const tnKey = draft.trainNumber.trim();
+      const existing = trainByNumber.get(tnKey);
+      if (!existing || draftRichness(draft) > draftRichness(existing)) {
+        trainByNumber.set(tnKey, draft);
+      }
+      continue;
+    }
     const key = draftIdentityKey(draft);
     if (seen.has(key)) {
       continue;
@@ -1826,7 +1868,8 @@ function dedupeDrafts(drafts: ForwardedReservationDraft[]): ForwardedReservation
   }
 
   const flights = [...flightByNumber.values()].sort((a, b) => a.localTime.localeCompare(b.localTime));
-  return [...flights, ...output];
+  const trains = [...trainByNumber.values()].sort((a, b) => a.localTime.localeCompare(b.localTime));
+  return [...flights, ...trains, ...output];
 }
 
 function chooseBodyText(text: string, html: string): { parsedText: string; lineAwareText: string; imageBasedEmail: boolean } {
@@ -1971,6 +2014,9 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
     });
   }
 
+  const railLegs = extractRailTicketLegs(lineAwareText, subject);
+  const likelyRailEmail = railLegs.length > 0 && !likelyFlightEmail;
+
   let allCandidateMaps: CandidateMap[];
   if (likelyFlightEmail || multiFlightDetected || aiCandidates.some(isFlightCandidate)) {
     allCandidateMaps = mergeFlightLegSources(
@@ -1979,6 +2025,10 @@ export async function parseForwardedEmail(input: ForwardedEmailParseInput): Prom
       candidates,
       lineAwareText,
       likelyFlightEmail || multiFlightDetected,
+    );
+  } else if (likelyRailEmail && railLegs.length > 1) {
+    allCandidateMaps = railLegs.map((leg) =>
+      sanitizeTravelLocalTime(railLegToCandidateMap(leg), lineAwareText),
     );
   } else if (aiCandidates.length > 0) {
     allCandidateMaps = aiCandidates.map((candidate) =>

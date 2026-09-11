@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Resend } from "resend";
+import { formatNamedPdfSection } from "@/lib/travelAssistant/emailSourceText";
 import { extractConfirmationPlainText } from "@/lib/travelAssistant/confirmationDocumentText";
 import {
   extractDocxPlainText,
@@ -31,8 +32,14 @@ function listReceivedAttachments(payload: unknown): ReceivedAttachmentMeta[] {
   return [];
 }
 
+export interface ReceivedPdfAttachment {
+  filename: string;
+  text: string;
+}
+
 export interface ReceivedAttachmentTextResult {
   pdfText: string;
+  pdfAttachments: ReceivedPdfAttachment[];
   docxText: string;
   legacyDocFilenames: string[];
 }
@@ -44,7 +51,12 @@ export async function extractAttachmentTextFromReceivedEmail(
   logContext?: Record<string, unknown>,
 ): Promise<ReceivedAttachmentTextResult> {
   const trimmedEmailId = emailId.trim();
-  const empty: ReceivedAttachmentTextResult = { pdfText: "", docxText: "", legacyDocFilenames: [] };
+  const empty: ReceivedAttachmentTextResult = {
+    pdfText: "",
+    pdfAttachments: [],
+    docxText: "",
+    legacyDocFilenames: [],
+  };
   if (!trimmedEmailId) return empty;
 
   try {
@@ -63,7 +75,7 @@ export async function extractAttachmentTextFromReceivedEmail(
     const attachments = listReceivedAttachments(listResponse.data);
     if (attachments.length === 0) return empty;
 
-    const pdfTexts: string[] = [];
+    const pdfAttachments: ReceivedPdfAttachment[] = [];
     const docxTexts: string[] = [];
     const legacyDocFilenames: string[] = [];
 
@@ -94,7 +106,12 @@ export async function extractAttachmentTextFromReceivedEmail(
         const bytes = Buffer.from(await response.arrayBuffer());
         if (wantPdf) {
           const plain = await extractConfirmationPlainText(bytes, "pdf");
-          if (plain.trim()) pdfTexts.push(plain.trim());
+          if (plain.trim()) {
+            pdfAttachments.push({
+              filename: attachment.filename?.trim() || "attachment.pdf",
+              text: plain.trim(),
+            });
+          }
         } else if (wantDocx) {
           const plain = await extractDocxPlainText(bytes);
           if (plain.trim()) docxTexts.push(plain.trim());
@@ -109,8 +126,13 @@ export async function extractAttachmentTextFromReceivedEmail(
       }
     }
 
+    const namedSections = pdfAttachments
+      .map((entry) => formatNamedPdfSection(entry.filename, entry.text))
+      .filter((section) => section.length > 0);
+
     return {
-      pdfText: pdfTexts.join("\n\n"),
+      pdfText: namedSections.join("\n\n"),
+      pdfAttachments,
       docxText: docxTexts.join("\n\n"),
       legacyDocFilenames,
     };

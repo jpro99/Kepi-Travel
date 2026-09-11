@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { buildSupportChatApiMessages } from "@/lib/support/buildSupportChatApiMessages";
-import { formatClientSupportContext } from "@/lib/support/clientSupportContext";
+import {
+  formatClientSupportContext,
+  getSupportLiveContext,
+} from "@/lib/support/clientSupportContext";
+import {
+  buildTripHelpContextFromLiveStorage,
+  tryAnswerTripQuestion,
+} from "@/lib/support/tripHelpAnswer";
 
 export type TravelAskRole = "user" | "assistant";
 
@@ -69,6 +76,27 @@ export function useTravelAskChat(options: UseTravelAskChatOptions = {}) {
       setIsSending(true);
       setInputValue("");
       setMessages((previous) => [...previous, outgoingMessage, assistantPlaceholder]);
+
+      const liveCtx = getSupportLiveContext();
+      const todayKey =
+        liveCtx.todayKey?.trim() || new Date().toISOString().slice(0, 10);
+      const helpContext =
+        buildTripHelpContextFromLiveStorage({ todayKey }) ?? {
+          todayKey,
+          reservations: [],
+        };
+      const factualAnswer = tryAnswerTripQuestion(trimmed, helpContext);
+      if (factualAnswer) {
+        setMessages((previous) =>
+          previous.map((message) =>
+            message.id === assistantPlaceholderId
+              ? { ...message, content: factualAnswer }
+              : message,
+          ),
+        );
+        setIsSending(false);
+        return;
+      }
 
       const clientContext = formatClientSupportContext();
       const mergedContext = [tripContext, clientContext].filter(Boolean).join("\n\n");

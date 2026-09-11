@@ -276,6 +276,7 @@ import { ConsumerSectionIcon } from "@/components/travelAssistant/ConsumerSectio
 import { EMPTY_HOME_CARD_CLASS } from "@/lib/travelAssistant/consumerVisualChrome";
 import { TravelFitCard } from "@/components/travelAssistant/TravelFitCard";
 import { TravelAskPanel } from "@/components/travelAssistant/TravelAskPanel";
+import { hasActiveTravelDayCoach } from "@/lib/travelAssistant/homeTravelDayCoach";
 import {
   TravelStyleBadge,
   TravelStyleQuiz,
@@ -324,6 +325,7 @@ import {
   type CalendarSyncSource,
 } from "@/lib/travelAssistant/calendarSyncClient";
 import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
+import { travelerTodayKey } from "@/lib/travelAssistant/homeTodayCoach";
 import {
   buildTripReadinessSummary,
   detectScheduleCollisions,
@@ -4811,6 +4813,15 @@ export default function TravelAssistantPage() {
     }
     return null;
   }, [consumerReservationsSorted]);
+  const travelDayHomeLead = useMemo(
+    () =>
+      hasActiveTravelDayCoach({
+        reservations: consumerReservationsSorted,
+        timezone: travelerTimezoneForHome,
+        tripId: activeTripId,
+      }),
+    [consumerReservationsSorted, travelerTimezoneForHome, activeTripId],
+  );
   const derivedTripStartDate = useMemo(() => {
     const flightDays = consumerReservationsSorted
       .filter((reservation) => reservation.type === "flight")
@@ -5434,7 +5445,7 @@ export default function TravelAssistantPage() {
 
   useEffect(() => {
     if (!activeTripId) return;
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayKey = travelerTodayKey(Date.now(), travelerTimezoneForHome);
     setSupportLiveContext({
       tripId: activeTripId,
       tripName: activeTrip?.name ?? null,
@@ -5476,6 +5487,7 @@ export default function TravelAssistantPage() {
     guidanceLocationStatus,
     journeyPhase.kind,
     travelerCaptureFactsLine,
+    travelerTimezoneForHome,
   ]);
 
   useEffect(() => {
@@ -6800,6 +6812,7 @@ export default function TravelAssistantPage() {
           openUpgradeModal("push-notifications", result.message);
         }
       } else {
+        setPushSubscribed(false);
         setPushMessage(result.message);
         setToast(result.message);
       }
@@ -10817,6 +10830,7 @@ export default function TravelAssistantPage() {
                 liveStatus={flightStatusCheckByReservationId}
                 pushSubscribed={pushSubscribed}
                 pushBusy={pushBusy}
+                pushMessage={pushMessage}
                 onEnablePush={() => {
                   void handleEnablePush();
                 }}
@@ -11000,13 +11014,15 @@ export default function TravelAssistantPage() {
             </section>
           ) : (
             <section className="space-y-3">
-              <TravelAskPanel
-                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
-                tripName={activeTrip?.name ?? null}
-                startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
-                endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
-                variant="embedded"
-              />
+              {!travelDayHomeLead ? (
+                <TravelAskPanel
+                  destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                  tripName={activeTrip?.name ?? null}
+                  startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+                  endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
+                  variant="embedded"
+                />
+              ) : null}
 
               {activeTrip && readinessItems.length > 0 ? (
                 <TripReadinessChecklistSection

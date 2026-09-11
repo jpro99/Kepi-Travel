@@ -29,6 +29,10 @@ export interface HomeStayReservation {
   flightNumber?: string;
   flightDate?: string;
   flightDepartureTime?: string;
+  flightArrivalTime?: string;
+  flightArrivalTerminal?: string;
+  /** Stored connection count from booking — omit from UI when unset (never invent). */
+  flightConnectionStops?: number;
 }
 
 export interface HomeNextTravelMove {
@@ -242,7 +246,7 @@ function formatShortDayLabel(dateKey: string, timezone?: string | null): string 
   }
 }
 
-function formatLocalTime(localTime: string | undefined): string | null {
+export function formatLocalTime(localTime: string | undefined): string | null {
   const match = (localTime ?? "").match(/\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/u);
   if (!match) return null;
   let hour = Number(match[1]);

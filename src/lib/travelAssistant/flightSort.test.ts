@@ -4,9 +4,13 @@ import {
   filterFlightsDepartingOnDay,
   selectNextRemainingFlight,
   selectTravelDayDepartureFlight,
+  selectTravelDayPrimaryFlight,
   sortFlightsByDeparture,
 } from "./flightSort";
 import { buildMissionControlSnapshot } from "./tripPhase";
+import {
+  BARI_VENICE_SEP_12_RESERVATIONS,
+} from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
 
 const EUROPE_OUTBOUND_STORE_ORDER = [
   {
@@ -242,4 +246,73 @@ test("M39: filterFlightsDepartingOnDay ignores other days", () => {
   );
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.flightDepartureAirport, "ONT");
+});
+
+test("G55: selectTravelDayPrimaryFlight prefers BRI→VCE over earlier BRI→FCO connector", () => {
+  const afterTrainMs = Date.parse("2026-09-12T09:20:00Z");
+  const pick = selectTravelDayPrimaryFlight(
+    [
+      {
+        id: "az1616",
+        type: "flight",
+        localTime: "2026-09-12 10:00",
+        timezone: "Europe/Rome",
+        flightDepartureAirport: "BRI",
+        flightArrivalAirport: "FCO",
+        flightDepartureTime: "2026-09-12 10:00",
+        flightNumber: "AZ1616",
+        flightDate: "2026-09-12",
+      },
+      {
+        id: "flight-bri-vce",
+        type: "flight",
+        localTime: "2026-09-12 15:20",
+        timezone: "Europe/Rome",
+        flightDepartureAirport: "BRI",
+        flightArrivalAirport: "VCE",
+        flightDepartureTime: "2026-09-12 15:20",
+        flightDate: "2026-09-12",
+      },
+    ],
+    { afterTrainDepartureUtcMs: afterTrainMs },
+  );
+  assert.equal(pick?.id, "flight-bri-vce");
+  assert.equal(pick?.flightArrivalAirport, "VCE");
+});
+
+test("G55: mission control nextFlight on Sep 12 Bari travel day is BRI→VCE Z84T4Z not AZ1616 FCO", () => {
+  const nowMs = Date.parse("2026-09-12T07:00:00Z");
+  const reservations = [
+    ...BARI_VENICE_SEP_12_RESERVATIONS,
+    {
+      id: "az1616-connector",
+      type: "flight",
+      title: "ITA AZ1616",
+      provider: "ITA Airways",
+      localTime: "2026-09-12 10:00",
+      timezone: "Europe/Rome",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-12 10:00",
+      flightArrivalTime: "2026-09-12 11:15",
+      flightNumber: "AZ1616",
+      flightDate: "2026-09-12",
+    },
+  ];
+  const snap = buildMissionControlSnapshot(
+    {
+      name: "Europe 2026",
+      startDate: "2026-09-01",
+      endDate: "2026-09-28",
+      reservations,
+      travelerTimezone: "Europe/Rome",
+      hasActiveTrip: true,
+    },
+    nowMs,
+  );
+  assert.equal(snap.phase, "departure_day");
+  assert.equal(snap.nextFlight?.id, "flight-bri-vce");
+  assert.equal(snap.nextFlight?.confirmationCode, "Z84T4Z");
+  assert.equal(snap.nextFlight?.flightArrivalAirport, "VCE");
+  assert.equal(snap.nextFlight?.flightNumber, undefined);
 });

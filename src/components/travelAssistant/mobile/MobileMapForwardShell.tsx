@@ -7,6 +7,7 @@ import { MissionControlView } from "@/components/travelAssistant/MissionControlV
 import { TravelAskPanel } from "@/components/travelAssistant/TravelAskPanel";
 import { TripSpendBadge } from "@/components/travelAssistant/TripSpendBadge";
 import { resolveNextCheckInHandoff } from "@/lib/travelAssistant/checkInHandoff";
+import { hasActiveTravelDayCoach } from "@/lib/travelAssistant/homeTravelDayCoach";
 import { MobileItineraryReader } from "@/components/travelAssistant/mobile/MobileItineraryReader";
 import { MobilePlanNotebook } from "@/components/travelAssistant/mobile/MobilePlanNotebook";
 import { MobileSettingsView } from "@/components/travelAssistant/mobile/MobileSettingsView";
@@ -296,6 +297,15 @@ export function MobileMapForwardShell({
   );
   const flightCount = reservations.filter((r) => r.type === "flight").length;
   const hotelCount = hotelReservations.length;
+  const travelDayHomeLead = useMemo(
+    () =>
+      hasActiveTravelDayCoach({
+        reservations,
+        timezone: travelerTimezone,
+        tripId,
+      }),
+    [reservations, travelerTimezone, tripId],
+  );
 
   const tripHeader = hasActiveTrip ? (
     <MobileTripShellHeader
@@ -339,6 +349,7 @@ export function MobileMapForwardShell({
           missingPriceCount={missingPriceCount}
           pushSubscribed={pushSubscribed}
           pushBusy={pushBusy}
+          pushMessage={pushMessage}
           onEnablePush={onEnablePush}
           onReservationTap={onReservationTap}
           onGapActionTap={onGapActionTap}
@@ -352,7 +363,7 @@ export function MobileMapForwardShell({
           tripId={tripId}
         />
 
-        {hasActiveTrip ? (
+        {hasActiveTrip && !travelDayHomeLead ? (
           <TravelAskPanel
             destination={destination}
             tripName={tripName}

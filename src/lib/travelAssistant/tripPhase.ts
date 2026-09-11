@@ -21,6 +21,17 @@ import {
   selectNextRemainingFlight,
   sortFlightsByDeparture,
 } from "@/lib/travelAssistant/flightSort";
+import {
+  isBookedFlightReservation,
+  mergeTravelDayFlightReservation,
+  normalizeTravelDayFlightReservation,
+  selectTravelDayPrimaryFlightReservation,
+} from "@/lib/travelAssistant/travelDayFlightView";
+import {
+  type TrainTicketSourceReservation,
+} from "@/lib/travelAssistant/trainTicketHandoff";
+import { trainReservationsOnDayExpanded } from "@/lib/travelAssistant/travelDayTrainExpand";
+import { resolveEffectiveTravelTimezone } from "@/lib/travelAssistant/homeTravelDayCoach";
 import { disruptionCalmHomeCopy } from "@/lib/travelAssistant/disruptionCalm";
 import type { StopDateRange } from "@/lib/decision/stopDates";
 import {
@@ -60,6 +71,7 @@ export interface MissionControlReservation {
   flightArrivalAirport?: string;
   flightDepartureTerminal?: string;
   flightArrivalTerminal?: string;
+  flightConnectionStops?: number;
   /** Confirmation / last-saved gate. Empty + live gate is assignment, not a change (G26). */
   flightDepartureGate?: string;
   checkOutDate?: string;
@@ -152,7 +164,17 @@ function hasTime(localTime: string | undefined | null): boolean {
 }
 
 function isBookedFlight(r: MissionControlReservation): boolean {
-  return r.type === "flight" && r.plannedOnly !== true;
+  return isBookedFlightReservation(r);
+}
+
+function flightsOnTravelDay(
+  reservations: MissionControlReservation[],
+  dateKey: string,
+): MissionControlReservation[] {
+  return reservations
+    .map((row) => normalizeTravelDayFlightReservation(row))
+    .filter(isBookedFlight)
+    .filter((row) => flightDepDay(row) === dateKey);
 }
 
 function isBookedHotel(r: MissionControlReservation): boolean {
@@ -313,7 +335,21 @@ export function detectMissionPhase(
     return "problem";
   }
 
-  const todayKey = isoDayFromMs(nowMs);
+  const travelerTimezone = resolveEffectiveTravelTimezone(
+    reservations,
+    input.travelerTimezone ?? null,
+  );
+  const todayKey = travelerTodayKey(nowMs, travelerTimezone);
+
+  const todayTrains = trainReservationsOnDayExpanded(
+    reservations as TrainTicketSourceReservation[],
+    todayKey,
+  );
+  const todayFlights = flightsOnTravelDay(reservations, todayKey);
+  if (todayTrains.length > 0 && todayFlights.length > 0) {
+    return "departure_day";
+  }
+
   const first = firstOutboundFlight(reservations, nowMs);
   const last = lastReturnFlight(reservations);
   const tripStart = dateOnly(input.startDate) || (first ? flightDepDay(first) : "");
@@ -420,11 +456,11 @@ export function buildMissionControlSnapshot(
   const reservations = input.reservations ?? [];
   const phase = detectMissionPhase(input, nowMs);
   const stopRanges = input.stopRanges ?? [];
-  const travelerTimezone = input.travelerTimezone ?? null;
-  const todayKey =
-    phase === "at_destination" && travelerTimezone
-      ? travelerTodayKey(nowMs, travelerTimezone)
-      : isoDayFromMs(nowMs);
+  const travelerTimezone = resolveEffectiveTravelTimezone(
+    reservations,
+    input.travelerTimezone ?? null,
+  );
+  const todayKey = travelerTodayKey(nowMs, travelerTimezone);
   const gapReservations = reservations.map((r) => ({
     ...r,
     provider: r.provider ?? "",
@@ -496,7 +532,27 @@ export function buildMissionControlSnapshot(
   if (problem) tripStatus = "problem";
 
   // F15 — one picker for Home TODAY / leave-by / check-in: earliest remaining booked segment.
-  const nextFlight = selectNextRemainingFlight(reservations.filter(isBookedFlight), nowMs);
+  let nextFlight = selectNextRemainingFlight(reservations.filter(isBookedFlight), nowMs);
+  const todayTrains = trainReservationsOnDayExpanded(
+    reservations as TrainTicketSourceReservation[],
+    todayKey,
+  );
+  const todayFlights = flightsOnTravelDay(reservations, todayKey);
+  if (todayTrains.length > 0 && todayFlights.length > 0) {
+    const lastTrain = todayTrains[todayTrains.length - 1];
+    const lastTrainDepMs = lastTrain
+      ? flightDepartureUtcMs({
+          localTime: lastTrain.localTime,
+          timezone: lastTrain.timezone ?? undefined,
+          flightDepartureTime: lastTrain.localTime,
+        })
+      : null;
+    const pick = selectTravelDayPrimaryFlightReservation(todayFlights, {
+      afterTrainDepartureUtcMs: lastTrainDepMs,
+    });
+    if (pick) nextFlight = mergeTravelDayFlightReservation(pick);
+  }
+
   const leaveByHint =
     phase === "departure_day" || phase === "return_day" || phase === "countdown"
       ? nextFlight

@@ -566,6 +566,43 @@ Friday, September 18, 2026 at 7:30 PM
   }
 });
 
+test("G55: J7HBM5 forward creates two train drafts (8312 + 91312)", async () => {
+  const previousKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const { TRENITALIA_STEPHANIE_PDF_TEXT } = await import(
+      "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture"
+    );
+    const result = await parseForwardedEmail({
+      subject: "Fwd: Trenitalia tickets Sep 12",
+      from: "noreply@trenitalia.com",
+      text: TRENITALIA_STEPHANIE_PDF_TEXT,
+      html: "",
+      attachments: [
+        { filename: "Stephanie-Russell-1980665325.pdf", contentType: "application/pdf" },
+        { filename: "Jeffery Paul-Russell-1980665325.pdf", contentType: "application/pdf" },
+      ],
+    });
+    assert.equal(result.drafts.filter((draft) => draft.type === "train").length, 2);
+    const fa8312 = result.drafts.find((draft) => draft.trainNumber === "8312");
+    const reg91312 = result.drafts.find((draft) => draft.trainNumber === "91312");
+    assert.ok(fa8312);
+    assert.ok(reg91312);
+    assert.equal(fa8312?.confirmationCode, "J7HBM5");
+    assert.equal(reg91312?.confirmationCode, "J7HBM5");
+    assert.equal(fa8312?.localTime, "2026-09-12 09:35");
+    assert.equal(reg91312?.localTime, "2026-09-12 11:20");
+    assert.match(fa8312?.location ?? "", /Lecce.*Bari Centrale/i);
+    assert.match(reg91312?.location ?? "", /Bari.*Aeroporto/i);
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  }
+});
+
 test("I58: Trenitalia 13/09/2026 is September 13 with Lecce → Venezia stations", async () => {
   const previousKey = process.env.ANTHROPIC_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;

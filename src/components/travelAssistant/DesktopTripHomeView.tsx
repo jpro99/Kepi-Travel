@@ -16,6 +16,7 @@ import type { HotelStayMapReservation } from "@/lib/travelAssistant/tripHotelSta
 import { TripHomeTransportSection } from "@/components/travelAssistant/TripHomeTransportSection";
 import { TravelAskPanel } from "@/components/travelAssistant/TravelAskPanel";
 import { isTravelDayTakeover } from "@/lib/travelAssistant/homeDayTruth";
+import { hasActiveTravelDayCoach } from "@/lib/travelAssistant/homeTravelDayCoach";
 import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
 import type { TravelStyleMode } from "@/lib/traveler/types";
 
@@ -88,6 +89,7 @@ interface DesktopTripHomeViewProps {
   >;
   pushSubscribed?: boolean;
   pushBusy?: boolean;
+  pushMessage?: string | null;
   onEnablePush?: () => void;
   unresolvedReviewCount?: number;
   onOpenReview?: () => void;
@@ -128,6 +130,7 @@ export function DesktopTripHomeView({
   missingPriceCount = 0,
   pushSubscribed = false,
   pushBusy = false,
+  pushMessage = null,
   onEnablePush,
   unresolvedReviewCount = 0,
   onOpenReview,
@@ -163,6 +166,16 @@ export function DesktopTripHomeView({
     [tripName, destination, startDate, endDate, reservations, stayDecisions, liveStatus, hasTrip, stopRanges, travelerTimezone],
   );
   const travelTakeover = isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
+  const travelDayHomeLead = useMemo(
+    () =>
+      hasActiveTravelDayCoach({
+        reservations,
+        timezone: travelerTimezone,
+        tripId,
+        flightLeaveByHint: snap.leaveByHint,
+      }),
+    [reservations, travelerTimezone, tripId, snap.leaveByHint],
+  );
 
   return (
     <section className="mx-auto max-w-2xl space-y-5 px-1">
@@ -187,6 +200,7 @@ export function DesktopTripHomeView({
         missingPriceCount={missingPriceCount}
         pushSubscribed={pushSubscribed}
         pushBusy={pushBusy}
+        pushMessage={pushMessage}
         onEnablePush={onEnablePush}
         onReservationTap={onReservationTap}
         onGapActionTap={onGapActionTap}
@@ -200,7 +214,7 @@ export function DesktopTripHomeView({
         tripId={tripId}
       />
 
-      {hasTrip ? (
+      {hasTrip && !travelDayHomeLead ? (
         <TravelAskPanel
           destination={destination}
           tripName={tripName}

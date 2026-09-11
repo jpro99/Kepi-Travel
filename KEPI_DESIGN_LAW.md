@@ -242,6 +242,9 @@ Gate updates flow push → FIDS/boarding STRING → booked confirmation only; ma
 **G54 — EC261 rights-notice coach cites official sources only**  
 Rights coach links EUR-Lex 261/2004, Your Europe, and the EU NEB list; July 2026 Parliament–Council reform language is date-stamped as not yet in force — never quote future reform euro amounts. Missed-flight ask → reason → checklist; Kepi does not auto-file claims.
 
+**G55 — Home travel day: train-first, then airport, stored tickets lead**  
+On a calendar travel day with booked train + flight (e.g. Lecce→Bari Centrale then BRI→VCE), Home replaces the generic okay/next/leave form and blocks misleading airport-only takeover until the train leg is done. Surfaces stored train PDF/email first, honest Bari Centrale→BRI transfer cue (no invented BRI gates/platforms), flight card + leave-by from booked times. Eve-before previews tomorrow's move via stay coach. `detectMissionPhase` uses traveler timezone for calendar today.
+
 **Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`
 
 
@@ -1112,6 +1115,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G52 | `src/lib/airportNav/travelerCaptureOutbox.test.ts`, `src/lib/airportNav/travelerCapture.test.ts` |
 | G53 | `src/lib/travelAssistant/gateStringPath.test.ts`, `src/lib/travelAssistant/dayOfStatusChrome.test.ts`, `src/lib/travelAssistant/softTripRefresh.test.ts` |
 | G54 | `src/lib/travelAssistant/ec261Coach.test.ts` |
+| G55 | `src/lib/travelAssistant/homeTravelDayCoach.test.ts`, `src/lib/support/tripHelpAnswer.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

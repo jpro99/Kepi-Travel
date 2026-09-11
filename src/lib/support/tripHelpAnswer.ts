@@ -209,6 +209,34 @@ function answerNextTravelDay(ctx: TripHelpContext): string | null {
   if (!move) {
     return "I don't see a next travel day on your trip yet — forward a train, flight, or hotel confirmation and I'll line it up.";
   }
+
+  if (move.kind === "train") {
+    const sameDayTrains = ctx.reservations
+      .filter((row) => row.type === "train" && dateOnly(row.localTime) === move.dateKey)
+      .sort((left, right) => (left.localTime ?? "").localeCompare(right.localTime ?? ""));
+    const trainLines = sameDayTrains.map(formatTrainLine);
+    const flightSameDay = ctx.reservations.find(
+      (row) =>
+        row.type === "flight" &&
+        dateOnly(row.flightDepartureTime ?? row.flightDate ?? row.localTime) === move.dateKey,
+    );
+    const parts = [...trainLines];
+    if (flightSameDay) {
+      const dep = flightSameDay.flightDepartureTime ?? flightSameDay.localTime ?? "";
+      const timePart = dep.includes(" ") ? dep.split(" ").slice(1).join(" ") : dep;
+      parts.push(
+        [
+          flightSameDay.flightNumber ?? "Flight",
+          `${flightSameDay.flightDepartureAirport ?? ""} → ${flightSameDay.flightArrivalAirport ?? ""}`.trim(),
+          timePart ? `departs ${timePart}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      );
+    }
+    return `Your next travel day is ${move.headline}. ${parts.join(" Then ")}`;
+  }
+
   return `Your next travel day is ${move.headline}. ${move.detail}`;
 }
 

@@ -2,6 +2,30 @@
 
 export const PDF_ATTACHMENT_MARKER = "--- PDF attachment ---";
 export const DOCX_ATTACHMENT_MARKER = "--- Word attachment ---";
+export const NAMED_PDF_SECTION_RE = /^--- PDF: (.+?) ---$/mu;
+
+/** One named PDF section inside stored source text (per-passenger Trenitalia tickets). */
+export function formatNamedPdfSection(filename: string, text: string): string {
+  const trimmed = text.trim();
+  const name = filename.trim();
+  if (!trimmed || !name) return "";
+  return `--- PDF: ${name} ---\n\n${trimmed}`;
+}
+
+export function extractNamedPdfSection(sourceText: string, passengerSlug: string): string | null {
+  const slug = passengerSlug.trim().toLowerCase();
+  if (!slug) return null;
+  const sections = sourceText.split(/(?=--- PDF: )/u);
+  for (const section of sections) {
+    const headerMatch = section.match(NAMED_PDF_SECTION_RE);
+    const filename = headerMatch?.[1]?.trim() ?? "";
+    if (!filename) continue;
+    const normalized = filename.toLowerCase().replace(/[^a-z0-9]+/gu, "-");
+    if (!normalized.includes(slug)) continue;
+    return section.trim();
+  }
+  return null;
+}
 
 export function extractPdfAttachmentSection(text: string): string {
   const marker = PDF_ATTACHMENT_MARKER;

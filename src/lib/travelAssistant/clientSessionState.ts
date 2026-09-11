@@ -30,6 +30,7 @@ export interface SessionReservation {
   flightDepartureTerminal?: string;
   flightArrivalGate?: string;
   flightArrivalTerminal?: string;
+  trainNumber?: string;
   checkOutDate?: string;
   roomType?: string;
   /** Front desk / property phone for emergencies. */

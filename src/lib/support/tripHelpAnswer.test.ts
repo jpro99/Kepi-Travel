@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { tryAnswerTripQuestion, type TripHelpReservation } from "@/lib/support/tripHelpAnswer";
+import { BARI_VENICE_SEP_12_RESERVATIONS } from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
 
 const NEREA_MONOPOLI_TRAIN: TripHelpReservation[] = [
   {
@@ -67,6 +68,23 @@ test("where am I uses active hotel on calendar today", () => {
   assert.ok(answer);
   assert.match(answer!, /Monopoli/i);
   assert.match(answer!, /NEREA/i);
+});
+
+const BARI_VENICE_SEP_12: TripHelpReservation[] = [...BARI_VENICE_SEP_12_RESERVATIONS];
+
+test("G55: Sep 11 Help answers next travel day with Lecce→Bari train facts", () => {
+  const answer = tryAnswerTripQuestion("What's my next travel day?", {
+    tripName: "Europe 2026",
+    destination: "Italy",
+    todayKey: "2026-09-11",
+    journeyPhase: "mid-stay",
+    reservations: BARI_VENICE_SEP_12,
+  });
+  assert.ok(answer);
+  assert.match(answer!, /Sep 12/i);
+  assert.match(answer!, /8312|Trenitalia|Lecce/i);
+  assert.match(answer!, /91312|Regionale|airport/i);
+  assert.match(answer!, /BRI|VCE|flight/i);
 });
 
 test("train time question returns departure from booked reservation", () => {

@@ -13,6 +13,7 @@ import { reservationPropertyName } from "@/lib/travelAssistant/reservationDispla
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { CheckInHandoffContent } from "@/lib/travelAssistant/checkInHandoff";
 import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffCard";
+import { BriAirportCoachCompact } from "@/components/travelAssistant/BriAirportCoachCompact";
 import { TrainTicketHandoffCard } from "@/components/travelAssistant/TrainTicketHandoffCard";
 import {
   buildConnectionCalmStatus,
@@ -53,7 +54,15 @@ import type { StopDateRange } from "@/lib/decision/stopDates";
 import {
   buildHomeTodayCoach,
   homeTodayCoachNextAction,
+  travelerTodayKey,
 } from "@/lib/travelAssistant/homeTodayCoach";
+import {
+  formatTravelDayFlightLead,
+  homeTravelDayCoachNextAction,
+  isTrainFlightTravelDayPattern,
+  resolveActiveTravelDayCoach,
+  resolveEffectiveTravelTimezone,
+} from "@/lib/travelAssistant/homeTravelDayCoach";
 import {
   resolveTrainTicketsForDay,
   resolveTrainTicketOpenTarget,
@@ -95,6 +104,7 @@ export interface MissionControlViewProps {
   /** Batch 1 — gate/delay push onboarding on Home. */
   pushSubscribed?: boolean;
   pushBusy?: boolean;
+  pushMessage?: string | null;
   onEnablePush?: () => void;
   onOpenBook: () => void;
   onOpenPlan: () => void;
@@ -182,6 +192,7 @@ export function MissionControlView({
   missingPriceCount = 0,
   pushSubscribed = false,
   pushBusy = false,
+  pushMessage = null,
   onEnablePush,
   onOpenBook,
   onOpenPlan,
@@ -453,6 +464,72 @@ export function MissionControlView({
   const showStrandedCard =
     strandedDetection.shouldPrompt && strandedDetection.prompt != null;
 
+  const calendarTodayKey = useMemo(
+    () => travelerTodayKey(Date.now(), travelerTimezone ?? snap.tonightHotel?.timezone ?? null),
+    [travelerTimezone, snap.tonightHotel?.timezone],
+  );
+
+  const travelDayTimezone = resolveEffectiveTravelTimezone(
+    reservations,
+    travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+  );
+
+  const activeTravelDay = useMemo(() => {
+    if (!showTravelOps) return null;
+    if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
+    return resolveActiveTravelDayCoach({
+      reservations,
+      timezone: travelDayTimezone,
+      tripId,
+      flightLeaveByHint: snap.leaveByHint,
+    });
+  }, [
+    showTravelOps,
+    journeyPhase?.kind,
+    reservations,
+    travelDayTimezone,
+    tripId,
+    snap.leaveByHint,
+  ]);
+
+  const travelDayLead = Boolean(activeTravelDay);
+  const travelDayCoach = activeTravelDay?.coach ?? null;
+
+  const effectiveNextFlight = useMemo(() => {
+    if (travelDayCoach?.flight?.id) {
+      const booked = reservations.find((row) => row.id === travelDayCoach.flight!.id);
+      if (booked) {
+        return {
+          ...booked,
+          flightNumber: travelDayCoach.flight.flightNumber,
+          flightDepartureAirport: travelDayCoach.flight.flightDepartureAirport,
+          flightArrivalAirport: travelDayCoach.flight.flightArrivalAirport,
+          flightDepartureTime: travelDayCoach.flight.flightDepartureTime,
+          flightArrivalTime: travelDayCoach.flight.flightArrivalTime,
+          flightArrivalTerminal: travelDayCoach.flight.flightArrivalTerminal,
+          confirmationCode: travelDayCoach.flight.confirmationCode ?? booked.confirmationCode,
+        };
+      }
+    }
+    if (
+      travelDayLead &&
+      isTrainFlightTravelDayPattern(
+        reservations,
+        travelerTodayKey(Date.now(), travelDayTimezone),
+      ) &&
+      snap.nextFlight
+    ) {
+      return snap.nextFlight;
+    }
+    return snap.nextFlight;
+  }, [
+    travelDayCoach?.flight,
+    travelDayLead,
+    reservations,
+    travelDayTimezone,
+    snap.nextFlight,
+  ]);
+
   const todayCoach = useMemo(() => {
     if (!showTravelOps || snap.phase !== "at_destination") return null;
     if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
@@ -500,6 +577,16 @@ export function MissionControlView({
     [todayCoach, nextTravelDayTrainHandoffs, nextTravelDayTicketUrl],
   );
 
+  const travelDayCoachAction = useMemo(
+    () =>
+      travelDayCoach
+        ? homeTravelDayCoachNextAction(travelDayCoach, {
+            primaryTicketUrl: travelDayCoach.trainHandoffs[0]?.primaryActionUrl ?? null,
+          })
+        : null,
+    [travelDayCoach],
+  );
+
   const walk = useMemo(
     () =>
       resolveTripWalk({
@@ -511,24 +598,25 @@ export function MissionControlView({
         prepWatchItems,
         prepMode,
         unresolvedReviewCount,
-        nextFlight: snap.nextFlight,
-        leaveByHint: snap.leaveByHint,
-        liveDepartureGate: snap.nextFlight
-          ? liveStatus?.[snap.nextFlight.id]?.departureGate
+        nextFlight: effectiveNextFlight,
+        leaveByHint: travelDayCoach?.leaveCue ?? snap.leaveByHint,
+        liveDepartureGate: effectiveNextFlight
+          ? liveStatus?.[effectiveNextFlight.id]?.departureGate
           : undefined,
-        storedDepartureGate: snap.nextFlight?.flightDepartureGate,
+        storedDepartureGate: effectiveNextFlight?.flightDepartureGate,
         connectionCalm,
-        airportSpotlight,
+        airportSpotlight: travelDayCoach?.hasTrainBeforeFlight ? null : airportSpotlight,
         strandedPrompt: showStrandedCard ? strandedDetection.prompt : null,
-        todayCoach: todayCoachAction,
-        stayLeaveCue: todayCoach?.leaveCue ?? null,
+        todayCoach: travelDayCoachAction ?? todayCoachAction,
+        stayLeaveCue: travelDayCoach?.leaveCue ?? todayCoach?.leaveCue ?? null,
       }),
     [
       journeyPhase,
       locationStatus,
       snap.openAirportMode,
       snap.attentionTop3,
-      snap.nextFlight,
+      effectiveNextFlight,
+      travelDayCoach?.leaveCue,
       snap.leaveByHint,
       atAirport,
       prepWatchItems,
@@ -537,27 +625,33 @@ export function MissionControlView({
       liveStatus,
       connectionCalm,
       airportSpotlight,
+      travelDayCoach?.hasTrainBeforeFlight,
       showStrandedCard,
       strandedDetection.prompt,
+      travelDayCoachAction,
       todayCoachAction,
+      travelDayCoach?.leaveCue,
       todayCoach?.leaveCue,
     ],
   );
   const travelTakeover =
-    journeyPhase != null && isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
+    !travelDayLead &&
+    journeyPhase != null &&
+    isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
 
   // I36 — Wallet-grade travel day: one headline, one CTA, nothing else.
   if (travelTakeover) {
-    const gate = snap.nextFlight ? liveStatus?.[snap.nextFlight.id]?.departureGate : null;
-    const routeLabel = snap.nextFlight
-      ? `${snap.nextFlight.flightDepartureAirport ?? ""} → ${snap.nextFlight.flightArrivalAirport ?? ""}`
+    const takeoverFlight = effectiveNextFlight;
+    const gate = takeoverFlight ? liveStatus?.[takeoverFlight.id]?.departureGate : null;
+    const routeLabel = takeoverFlight
+      ? `${takeoverFlight.flightDepartureAirport ?? ""} → ${takeoverFlight.flightArrivalAirport ?? ""}`
       : snap.identityLabel;
 
     let eyebrow = snap.phase === "departure_day" ? "Today" : "Travel day";
-    let title = snap.leaveByHint || "You're traveling today";
+    let title = (travelDayCoach?.leaveCue ?? snap.leaveByHint) || "You're traveling today";
     let detail: string | null =
-      snap.phase === "departure_day" && snap.nextFlight
-        ? formatTravelDayFlightLabel(snap.nextFlight)
+      snap.phase === "departure_day" && takeoverFlight
+        ? formatTravelDayFlightLabel(takeoverFlight)
         : routeLabel;
     let tone: "blue" | "green" = "blue";
 
@@ -585,15 +679,15 @@ export function MissionControlView({
       title = walk.next.title;
       detail =
         walk.next.detail ??
-        (snap.nextFlight
-          ? `${snap.nextFlight.flightNumber || "Flight"} · ${routeLabel}`
+        (takeoverFlight
+          ? `${takeoverFlight.flightNumber || "Flight"} · ${routeLabel}`
           : "Your next steps are on the airport map");
-    } else if (snap.leaveByHint) {
-      title = snap.leaveByHint;
+    } else if (travelDayCoach?.leaveCue ?? snap.leaveByHint) {
+      title = travelDayCoach?.leaveCue ?? snap.leaveByHint ?? title;
       detail = gate
         ? `Gate ${gate} · ${routeLabel}`
-        : snap.nextFlight
-          ? `${snap.nextFlight.flightNumber || "Flight"} · ${routeLabel}`
+        : takeoverFlight
+          ? `${takeoverFlight.flightNumber || "Flight"} · ${routeLabel}`
           : detail;
     }
 
@@ -623,7 +717,7 @@ export function MissionControlView({
           <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/70">{eyebrow}</p>
           <h2 className="mt-2 text-[28px] font-semibold tracking-tight leading-tight">{title}</h2>
           {detail ? <p className="mt-2 text-[17px] text-white/85">{detail}</p> : null}
-          {connectionCalm.kind === "conflict" && connectionCalm.line ? (
+          {!travelDayLead && connectionCalm.kind === "conflict" && connectionCalm.line ? (
             <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-[14px] font-medium text-white">
               {connectionCalm.line}
             </p>
@@ -697,8 +791,15 @@ export function MissionControlView({
 
   const activeStatus =
     zoom === "today" ? snap.today.status : zoom === "week" ? weekStatus(snap.week) : snap.tripStatus;
-  const stayCoachLead = todayCoach && zoom === "today" && showTravelOps && !prepMode;
-  const activeSummary = stayCoachLead
+  const stayCoachLead =
+    !travelDayLead &&
+    Boolean(todayCoach) &&
+    zoom === "today" &&
+    showTravelOps &&
+    !prepMode;
+  const activeSummary = travelDayLead && travelDayCoach
+    ? `${travelDayCoach.dayLabel} — ${travelDayCoach.leadDetail}`
+    : stayCoachLead && todayCoach?.nextTravelMove && !travelDayLead
     ? todayCoach.nextTravelMove
       ? `${todayCoach.nextTravelMove.dayLabel} — ${todayCoach.nextTravelMove.headline}. ${todayCoach.nextTravelMove.detail}`
       : [todayCoach.leadDetail, todayCoach.tomorrowDetail, todayCoach.transferHint]
@@ -843,55 +944,133 @@ export function MissionControlView({
           {statusLabel(activeStatus)}
         </p>
         <h2 className="mt-1 text-[22px] font-semibold tracking-tight text-[#1D1D1F]">
-          {stayCoachLead
-            ? todayCoach.leadTitle
-            : heroTitle(activeStatus, zoom, {
-                day: snap.today,
-                daysUntil: snap.daysUntilDeparture,
-                prepMode,
-              })}
+          {travelDayLead && travelDayCoach
+            ? travelDayCoach.headline
+            : stayCoachLead && todayCoach
+              ? todayCoach.leadTitle
+              : heroTitle(activeStatus, zoom, {
+                  day: snap.today,
+                  daysUntil: snap.daysUntilDeparture,
+                  prepMode,
+                })}
         </h2>
-        <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
+        {travelDayLead && travelDayCoach && travelDayCoach.briAirportCoachSteps.length > 0 ? (
+          <BriAirportCoachCompact steps={travelDayCoach.briAirportCoachSteps} />
+        ) : null}
+        {travelDayLead && travelDayCoach ? null : (
+          <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
+        )}
 
-        <dl className="mt-3 space-y-2 rounded-xl bg-white px-3 py-3">
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-              Are you okay?
-            </dt>
-            <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.okay.line}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-              What’s next?
-            </dt>
-            <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.next.title}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-              When do you leave?
-            </dt>
-            <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
-              {walk.leaveBy ??
-                (prepMode
-                  ? "Not the leave window yet"
-                  : stayCoachLead && todayCoach?.nextTravelMove
-                    ? todayCoach.nextTravelMove.detail
-                    : "No leave time on the trip yet")}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-              What can break?
-            </dt>
-            <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
-              {walk.canBreak.length > 0
-                ? walk.canBreak.map((item) => item.title).join(" · ")
-                : "Nothing flagged"}
-            </dd>
-          </div>
-        </dl>
+        {!travelDayLead ? (
+          <dl className="mt-3 space-y-2 rounded-xl bg-white px-3 py-3">
+            <div>
+              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                Are you okay?
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.okay.line}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                What’s next?
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.next.title}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                When do you leave?
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
+                {walk.leaveBy ??
+                  (prepMode
+                    ? "Not the leave window yet"
+                    : stayCoachLead && todayCoach?.nextTravelMove
+                      ? todayCoach.nextTravelMove.detail
+                      : "No leave time on the trip yet")}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                What can break?
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
+                {walk.canBreak.length > 0
+                  ? walk.canBreak.map((item) => item.title).join(" · ")
+                  : "Nothing flagged"}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
 
-        {stayCoachLead && todayCoach.nextTravelMove ? (
+        {travelDayLead && travelDayCoach ? (
+          <div className="mt-2 space-y-2">
+            {travelDayCoach.leaveCue ? (
+              <div className="rounded-xl bg-white px-3 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Leave-by
+                </p>
+                <p className="mt-1 text-[16px] font-semibold text-[#1D1D1F]">{travelDayCoach.leaveCue}</p>
+              </div>
+            ) : null}
+            {travelDayCoach.trainHandoffs.length > 0 ? (
+              travelDayCoach.trainHandoffs.map((handoff) => (
+                <TrainTicketHandoffCard
+                  key={handoff.reservationId}
+                  content={handoff}
+                  eyebrow={`Travel day · ${travelDayCoach.dayLabel}`}
+                />
+              ))
+            ) : null}
+            {travelDayCoach.walkthroughSteps.length > 0 &&
+            travelDayCoach.briAirportCoachSteps.length === 0 ? (
+              <div className="rounded-xl bg-white px-3 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Your travel day walkthrough
+                </p>
+                <ol className="mt-2 space-y-3">
+                  {travelDayCoach.walkthroughSteps.map((step, index) => (
+                    <li key={step.id} className="flex gap-3">
+                      <span
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#007AFF]/10 text-[12px] font-bold text-[#007AFF]"
+                        aria-hidden="true"
+                      >
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-semibold leading-snug text-[#1D1D1F]">{step.title}</p>
+                        <p className="mt-0.5 text-[14px] leading-relaxed text-[#6E6E73]">{step.detail}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : travelDayCoach.briAirportCoachSteps.length === 0 && travelDayCoach.airportTransferHint ? (
+              <div className="rounded-xl bg-white px-3 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  After the train
+                </p>
+                <p className="mt-1 text-[15px] leading-relaxed text-[#1D1D1F]">
+                  {travelDayCoach.airportTransferHint}
+                </p>
+              </div>
+            ) : null}
+            {travelDayCoach.flight ? (
+              <button
+                type="button"
+                onClick={() => onReservationTap?.(travelDayCoach.flight!.id)}
+                className="w-full rounded-xl bg-white px-3 py-3 text-left"
+              >
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Flight today
+                </p>
+                <p className="mt-1 text-[16px] font-semibold leading-snug text-[#1D1D1F]">
+                  {formatTravelDayFlightLead(travelDayCoach.flight)}
+                </p>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {stayCoachLead && todayCoach?.nextTravelMove && !travelDayLead ? (
           <div className="mt-3 space-y-2">
             {nextTravelDayTrainHandoffs.length > 0 ? (
               nextTravelDayTrainHandoffs.map((handoff) => (
@@ -928,7 +1107,7 @@ export function MissionControlView({
           </div>
         ) : null}
 
-        {showTravelOps && connectionCalm.line ? (
+        {showTravelOps && !travelDayLead && connectionCalm.line ? (
           <p
             className={`mt-3 rounded-xl px-3 py-2 text-[14px] font-medium ${
               connectionCalm.kind === "conflict"
@@ -954,6 +1133,9 @@ export function MissionControlView({
             >
               {pushBusy ? "Enabling…" : "Enable flight alerts"}
             </button>
+            {pushMessage && !pushMessage.startsWith("✅") ? (
+              <p className="mt-2 text-[13px] leading-relaxed text-[#C93400]">{pushMessage}</p>
+            ) : null}
           </div>
         ) : null}
 
@@ -981,25 +1163,40 @@ export function MissionControlView({
           </div>
         ) : null}
 
-        {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day" || stayCoachLead) ? (
+        {showTravelOps &&
+        !travelDayLead &&
+        effectiveNextFlight &&
+        (zoom === "today" || snap.phase === "departure_day" || stayCoachLead) ? (
           <button
             type="button"
-            onClick={() => onReservationTap?.(snap.nextFlight!.id)}
+            onClick={() => onReservationTap?.(effectiveNextFlight!.id)}
             className="mt-3 w-full rounded-xl bg-white px-3 py-3 text-left"
           >
             <p className="text-[13px] font-semibold text-[#6E6E73]">
               {stayCoachLead ? "Next flight" : "Next flight"}
             </p>
-            <p className="mt-0.5 text-[16px] font-semibold text-[#1D1D1F]">
-              {snap.nextFlight.flightNumber || "Flight"} ·{" "}
-              {snap.nextFlight.flightDepartureAirport} → {snap.nextFlight.flightArrivalAirport}
+            <p className="mt-0.5 text-[16px] font-semibold leading-snug text-[#1D1D1F]">
+              {travelDayCoach?.flight
+                ? formatTravelDayFlightLead(travelDayCoach.flight)
+                : [
+                    effectiveNextFlight.flightNumber,
+                    effectiveNextFlight.flightDepartureAirport &&
+                      effectiveNextFlight.flightArrivalAirport
+                      ? `${effectiveNextFlight.flightDepartureAirport} → ${effectiveNextFlight.flightArrivalAirport}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "Flight"}
             </p>
             <p className="mt-1 text-[14px] text-[#007AFF]">
               {formatFlightStatusTrustLine({
-                ...nextFlightLive,
-                bookedGate: snap.nextFlight.flightDepartureGate,
-                bookedStatus: nextFlightLive?.bookedStatus,
-                departureIata: snap.nextFlight.flightDepartureAirport,
+                ...(effectiveNextFlight.id === snap.nextFlight?.id ? nextFlightLive : undefined),
+                bookedGate: effectiveNextFlight.flightDepartureGate,
+                bookedStatus:
+                  effectiveNextFlight.id === snap.nextFlight?.id
+                    ? nextFlightLive?.bookedStatus
+                    : undefined,
+                departureIata: effectiveNextFlight.flightDepartureAirport,
               })}
             </p>
             {dayOfStatusChrome?.badge && !dayOfStatusChrome.banner ? (
@@ -1045,7 +1242,7 @@ export function MissionControlView({
           </div>
         ) : null}
 
-        {!(stayCoachLead && todayCoach?.nextTravelMove) ? (
+        {!(travelDayLead || (stayCoachLead && todayCoach?.nextTravelMove)) ? (
         <div
           className={`mt-4 rounded-2xl px-4 py-4 ${
             nextAction.kind === "ready"
