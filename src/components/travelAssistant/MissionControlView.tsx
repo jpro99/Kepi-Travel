@@ -13,6 +13,7 @@ import { reservationPropertyName } from "@/lib/travelAssistant/reservationDispla
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import type { CheckInHandoffContent } from "@/lib/travelAssistant/checkInHandoff";
 import { CheckInHandoffCard } from "@/components/travelAssistant/CheckInHandoffCard";
+import { BriAirportCoachCompact } from "@/components/travelAssistant/BriAirportCoachCompact";
 import { TrainTicketHandoffCard } from "@/components/travelAssistant/TrainTicketHandoffCard";
 import {
   buildConnectionCalmStatus,
@@ -953,7 +954,12 @@ export function MissionControlView({
                   prepMode,
                 })}
         </h2>
-        <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
+        {travelDayLead && travelDayCoach && travelDayCoach.briAirportCoachSteps.length > 0 ? (
+          <BriAirportCoachCompact steps={travelDayCoach.briAirportCoachSteps} />
+        ) : null}
+        {travelDayLead && travelDayCoach ? null : (
+          <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
+        )}
 
         {!travelDayLead ? (
           <dl className="mt-3 space-y-2 rounded-xl bg-white px-3 py-3">
@@ -996,30 +1002,7 @@ export function MissionControlView({
         ) : null}
 
         {travelDayLead && travelDayCoach ? (
-          <div className="mt-3 space-y-2">
-            {travelDayCoach.briAirportCoachSteps.length > 0 ? (
-              <div className="rounded-xl bg-white px-3 py-3 text-left">
-                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-                  Bari airport coach
-                </p>
-                <ol className="mt-2 space-y-3">
-                  {travelDayCoach.briAirportCoachSteps.map((step, index) => (
-                    <li key={step.id} className="flex gap-3">
-                      <span
-                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#007AFF]/10 text-[12px] font-bold text-[#007AFF]"
-                        aria-hidden="true"
-                      >
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[15px] font-semibold leading-snug text-[#1D1D1F]">{step.title}</p>
-                        <p className="mt-0.5 text-[14px] leading-relaxed text-[#6E6E73]">{step.detail}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ) : null}
+          <div className="mt-2 space-y-2">
             {travelDayCoach.leaveCue ? (
               <div className="rounded-xl bg-white px-3 py-3 text-left">
                 <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
@@ -1037,7 +1020,8 @@ export function MissionControlView({
                 />
               ))
             ) : null}
-            {travelDayCoach.walkthroughSteps.length > 0 ? (
+            {travelDayCoach.walkthroughSteps.length > 0 &&
+            travelDayCoach.briAirportCoachSteps.length === 0 ? (
               <div className="rounded-xl bg-white px-3 py-3 text-left">
                 <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
                   Your travel day walkthrough
@@ -1059,7 +1043,7 @@ export function MissionControlView({
                   ))}
                 </ol>
               </div>
-            ) : travelDayCoach.airportTransferHint ? (
+            ) : travelDayCoach.briAirportCoachSteps.length === 0 && travelDayCoach.airportTransferHint ? (
               <div className="rounded-xl bg-white px-3 py-3 text-left">
                 <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
                   After the train

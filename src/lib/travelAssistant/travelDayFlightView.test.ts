@@ -204,11 +204,13 @@ test("first-paint Sep 12 live-shaped: gospel coach — not Lecce mid-stay or AZ1
   assert.match(paint.headline, /VCE|Venice/i);
   assert.doesNotMatch(paint.aboveFoldText, /AZ1616/i);
   assert.doesNotMatch(paint.aboveFoldText, /fly to FCO|→ FCO/i);
+  assert.match(paint.aboveFoldPriorityText, /Aeroporto K\.W\./i);
+  assert.match(paint.aboveFoldPriorityText, /tunnel/i);
+  assert.match(paint.aboveFoldPriorityText, /arrivals/i);
+  assert.match(paint.aboveFoldPriorityText, /isole A\/B/i);
   assert.match(paint.aboveFoldText, /8312/i);
   assert.match(paint.aboveFoldText, /91312/i);
   assert.match(paint.aboveFoldText, /Z84T4Z/i);
-  assert.match(paint.aboveFoldText, /tunnel/i);
-  assert.match(paint.aboveFoldText, /isole A\/B|Aeroporto K\.W\./i);
   assert.equal(
     paint.nextFlightText,
     "Confirmation Z84T4Z · BRI → VCE · 3:20 PM–6:25 PM · 1 stop · VCE T1",
@@ -227,9 +229,10 @@ test("first-paint Sep 11 eve: tomorrow travel-day coach leads — not Lecce / AZ
   assert.doesNotMatch(paint.headline, /fly to FCO|→ FCO/i);
   assert.match(paint.headline, /VCE|Venice/i);
   assert.doesNotMatch(paint.aboveFoldText, /AZ1616/i);
+  assert.match(paint.aboveFoldPriorityText, /isole A\/B/i);
+  assert.match(paint.aboveFoldPriorityText, /tunnel|K\.W\./i);
   assert.match(paint.aboveFoldText, /91312/i);
   assert.match(paint.aboveFoldText, /Z84T4Z/i);
-  assert.match(paint.aboveFoldText, /tunnel|isole|K\.W\./i);
 });
 
 test("live-shaped headline uses merged VCE arrival — not connector FCO or Lecce lead", () => {

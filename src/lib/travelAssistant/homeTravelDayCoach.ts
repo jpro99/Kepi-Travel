@@ -497,6 +497,11 @@ export function resolveActiveTravelDayCoach(input: {
   return null;
 }
 
+/** Priority above-fold copy — headline + compact BRI coach titles (matches first-paint hero). */
+export function travelDayAboveFoldPriorityText(coach: HomeTravelDayCoach): string {
+  return [coach.headline, ...coach.briAirportCoachSteps.map((step) => step.title)].join(" ");
+}
+
 /** Above-fold Home lead text for regression tests — mirrors Mission Control travel-day hero. */
 export function buildHomeFirstPaintLead(input: {
   reservations: HomeStayReservation[];
@@ -509,6 +514,7 @@ export function buildHomeFirstPaintLead(input: {
   summary: string;
   nextFlightText: string | null;
   aboveFoldText: string;
+  aboveFoldPriorityText: string;
   travelDayLead: boolean;
 } {
   const active = resolveActiveTravelDayCoach(input);
@@ -518,15 +524,17 @@ export function buildHomeFirstPaintLead(input: {
       summary: "",
       nextFlightText: null,
       aboveFoldText: "",
+      aboveFoldPriorityText: "",
       travelDayLead: false,
     };
   }
   const { coach } = active;
   const nextFlightText = coach.flight ? formatTravelDayFlightLead(coach.flight) : null;
+  const aboveFoldPriorityText = travelDayAboveFoldPriorityText(coach);
   const aboveFoldText = [
-    coach.headline,
+    aboveFoldPriorityText,
     coach.leadDetail,
-    ...coach.briAirportCoachSteps.map((step) => `${step.title} ${step.detail}`),
+    ...coach.briAirportCoachSteps.map((step) => step.detail),
     ...coach.trainHandoffs.map((handoff) => `${handoff.headline} ${handoff.detail}`),
     ...coach.walkthroughSteps.map((step) => `${step.title} ${step.detail}`),
     nextFlightText ?? "",
@@ -536,6 +544,7 @@ export function buildHomeFirstPaintLead(input: {
     summary: `${coach.dayLabel} — ${coach.leadDetail}`,
     nextFlightText,
     aboveFoldText,
+    aboveFoldPriorityText,
     travelDayLead: true,
   };
 }
