@@ -88,6 +88,7 @@ interface DesktopTripHomeViewProps {
   >;
   pushSubscribed?: boolean;
   pushBusy?: boolean;
+  pushMessage?: string | null;
   onEnablePush?: () => void;
   unresolvedReviewCount?: number;
   onOpenReview?: () => void;
@@ -128,6 +129,7 @@ export function DesktopTripHomeView({
   missingPriceCount = 0,
   pushSubscribed = false,
   pushBusy = false,
+  pushMessage = null,
   onEnablePush,
   unresolvedReviewCount = 0,
   onOpenReview,
@@ -187,6 +189,7 @@ export function DesktopTripHomeView({
         missingPriceCount={missingPriceCount}
         pushSubscribed={pushSubscribed}
         pushBusy={pushBusy}
+        pushMessage={pushMessage}
         onEnablePush={onEnablePush}
         onReservationTap={onReservationTap}
         onGapActionTap={onGapActionTap}

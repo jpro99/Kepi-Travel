@@ -4,6 +4,7 @@ import { detectMissionPhase } from "@/lib/travelAssistant/tripPhase";
 import {
   buildBriAirportTransferHint,
   buildHomeTravelDayCoach,
+  buildTravelDayWalkthroughSteps,
   dayHasBookedTravelMoves,
   homeTravelDayCoachNextAction,
   resolveTomorrowTravelDayCoach,
@@ -53,6 +54,71 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[0]!.actionUrl, /passenger=stephanie/i);
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[1]!.actionUrl, /passenger=jeffery/i);
   assert.match(coach!.leaveCue ?? "", /Train departs 9:35/i);
+  assert.ok(coach!.walkthroughSteps.length >= 7);
+  const walkText = coach!.walkthroughSteps.map((step) => `${step.title} ${step.detail}`).join(" ");
+  assert.match(walkText, /8312/i);
+  assert.match(walkText, /After you alight at Bari Centrale/i);
+  assert.match(walkText, /91312/i);
+  assert.match(walkText, /FNB/i);
+  assert.match(walkText, /Aeroporto K\.W\./i);
+  assert.match(walkText, /300 m tunnel/i);
+  assert.match(walkText, /Ferrotramviaria/i);
+  assert.match(walkText, /ground-floor arrivals/i);
+  assert.match(walkText, /isole A\/B and C\/D/i);
+  assert.match(walkText, /Stephanie/i);
+  assert.match(walkText, /Jeffery/i);
+  assert.match(walkText, /AZ1464/i);
+  assert.match(walkText, /3:20|15:20/i);
+  assert.match(walkText, /Terminal 1/i);
+  assert.match(walkText, /Z84T4Z/i);
+  assert.doesNotMatch(walkText, /\bgate\s+[AB]\d{1,2}\b/i);
+  assert.doesNotMatch(walkText, /ITA door/i);
+});
+
+test("G55: walkthrough order is 8312 → Centrale → 91312 → BRI coach (4) → ITA flight", () => {
+  const coach = buildHomeTravelDayCoach({
+    reservations: BARI_VENICE_SEP_12,
+    dateKey: "2026-09-12",
+    timezone: "Europe/Rome",
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.ok(coach);
+  const titles = coach!.walkthroughSteps.map((step) => step.title);
+  const idx8312 = titles.findIndex((title) => /8312/u.test(title));
+  const idxCentrale = titles.findIndex((title) => /After you alight/i.test(title));
+  const idx91312 = titles.findIndex((title) => /91312/u.test(title));
+  const idxKwStop = titles.findIndex((title) => /Aeroporto Karol Wojtyła rail stop/i.test(title));
+  const idxTunnel = titles.findIndex((title) => /tunnel/i.test(title));
+  const idxArrivals = titles.findIndex((title) => /Arrivals — ground floor/i.test(title));
+  const idxCheckIn = titles.findIndex((title) => /Check-in isole/i.test(title));
+  const idxFlight = titles.findIndex((title) => /AZ1464|BRI → VCE/u.test(title));
+  assert.ok(idx8312 >= 0 && idxCentrale > idx8312);
+  assert.ok(idx91312 > idxCentrale);
+  assert.ok(idxKwStop > idx91312);
+  assert.ok(idxTunnel > idxKwStop);
+  assert.ok(idxArrivals > idxTunnel);
+  assert.ok(idxCheckIn > idxArrivals);
+  assert.ok(idxFlight > idxCheckIn);
+  assert.equal(idxFlight, coach!.walkthroughSteps.length - 1);
+});
+
+test("buildTravelDayWalkthroughSteps lists both passengers on train legs", () => {
+  const coach = buildHomeTravelDayCoach({
+    reservations: BARI_VENICE_SEP_12,
+    dateKey: "2026-09-12",
+    timezone: "Europe/Rome",
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.ok(coach);
+  const steps = buildTravelDayWalkthroughSteps({
+    trains: BARI_VENICE_SEP_12.filter((row) => row.type === "train") as never[],
+    trainHandoffs: coach!.trainHandoffs,
+    flight: coach!.flight,
+  });
+  const trainSteps = steps.filter((step) => /8312|91312/u.test(step.title));
+  assert.equal(trainSteps.length, 2);
+  assert.match(trainSteps[0]!.detail, /Stephanie/i);
+  assert.match(trainSteps[0]!.detail, /Jeffery/i);
 });
 
 test("G55: stored source text includes both passenger PDF sections", () => {

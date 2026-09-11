@@ -6802,6 +6802,7 @@ export default function TravelAssistantPage() {
           openUpgradeModal("push-notifications", result.message);
         }
       } else {
+        setPushSubscribed(false);
         setPushMessage(result.message);
         setToast(result.message);
       }
@@ -10819,6 +10820,7 @@ export default function TravelAssistantPage() {
                 liveStatus={flightStatusCheckByReservationId}
                 pushSubscribed={pushSubscribed}
                 pushBusy={pushBusy}
+                pushMessage={pushMessage}
                 onEnablePush={() => {
                   void handleEnablePush();
                 }}

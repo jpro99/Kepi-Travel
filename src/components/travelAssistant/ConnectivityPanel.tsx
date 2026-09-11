@@ -14,6 +14,11 @@ import {
   registerPushToken,
   scheduleLocalNotification,
 } from "@/lib/native/capacitorBridge";
+import {
+  readNotificationPermissionState,
+  readWebPushSubscriptionActive,
+  subscribeToWebPushNotifications,
+} from "@/lib/push/webPushClient";
 
 type NetworkMode = "wifi" | "cellular" | "offline";
 
@@ -56,17 +61,6 @@ interface ConnectivityPanelProps {
   onRequestUpgradeForPush: () => void;
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replaceAll("-", "+").replaceAll("_", "/");
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let index = 0; index < rawData.length; index += 1) {
-    outputArray[index] = rawData.charCodeAt(index);
-  }
-  return outputArray;
-}
-
 export function ConnectivityPanel({
   networkMode,
   onNetworkModeChange,
@@ -102,6 +96,7 @@ export function ConnectivityPanel({
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsBusy, setNotificationsBusy] = useState(false);
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
+  const [notificationsBlocked, setNotificationsBlocked] = useState(false);
   const nativeContext = useMemo(() => isNative(), []);
   const notificationsSupported =
     nativeContext ||
@@ -128,11 +123,12 @@ export function ConnectivityPanel({
       }
 
       try {
-        const registration = await navigator.serviceWorker.register("/sw.js");
-        const subscription = await registration.pushManager.getSubscription();
-        setNotificationsEnabled(Boolean(subscription) && Notification.permission === "granted");
+        const active = await readWebPushSubscriptionActive();
+        setNotificationsEnabled(active);
+        setNotificationsBlocked(readNotificationPermissionState() === "denied");
       } catch {
         setNotificationsEnabled(false);
+        setNotificationsBlocked(readNotificationPermissionState() === "denied");
       }
     };
 
@@ -145,6 +141,7 @@ export function ConnectivityPanel({
     }
     setNotificationsBusy(true);
     setNotificationsError(null);
+    setNotificationsBlocked(false);
     try {
       if (nativeContext) {
         if (notificationsEnabled) {
@@ -185,10 +182,9 @@ export function ConnectivityPanel({
         return;
       }
 
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const existingSubscription = await registration.pushManager.getSubscription();
-
       if (notificationsEnabled) {
+        const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+        const existingSubscription = await registration?.pushManager.getSubscription();
         if (existingSubscription) {
           await existingSubscription.unsubscribe();
         }
@@ -200,40 +196,22 @@ export function ConnectivityPanel({
         return;
       }
 
-      const permission =
-        Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
-      if (permission !== "granted") {
-        throw new Error("Browser notification permission not granted.");
+      const result = await subscribeToWebPushNotifications();
+      if (result.ok) {
+        setNotificationsEnabled(true);
+        setNotificationsBlocked(false);
+        return;
       }
-
-      const keyResponse = await fetch("/api/push/subscribe", { method: "GET" });
-      if (!keyResponse.ok) {
-        throw new Error(`Unable to fetch VAPID public key (${keyResponse.status}).`);
+      if (result.blocked) {
+        setNotificationsBlocked(true);
       }
-      const keyPayload = (await keyResponse.json()) as { publicKey?: string };
-      if (!keyPayload.publicKey) {
-        throw new Error("Push public key missing from server response.");
-      }
-
-      const subscription =
-        existingSubscription ??
-        (await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(keyPayload.publicKey) as unknown as BufferSource,
-        }));
-
-      const subscribeResponse = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(subscription.toJSON()),
-      });
-      if (!subscribeResponse.ok) {
-        throw new Error(`Push subscribe failed (${subscribeResponse.status}).`);
-      }
-      setNotificationsEnabled(true);
+      throw new Error(result.message);
     } catch (error) {
       setNotificationsError(error instanceof Error ? error.message : "Unknown notification error.");
       setNotificationsEnabled(false);
+      if (readNotificationPermissionState() === "denied") {
+        setNotificationsBlocked(true);
+      }
     } finally {
       setNotificationsBusy(false);
     }
@@ -309,7 +287,9 @@ export function ConnectivityPanel({
               : notificationsSupported
                 ? notificationsEnabled
                   ? "enabled"
-                  : "disabled"
+                  : notificationsBlocked
+                    ? "blocked in browser settings"
+                    : "disabled"
                 : "disabled (unsupported)"}
           </p>
           {!canUsePushNotifications ? (

@@ -339,6 +339,7 @@ export function MobileMapForwardShell({
           missingPriceCount={missingPriceCount}
           pushSubscribed={pushSubscribed}
           pushBusy={pushBusy}
+          pushMessage={pushMessage}
           onEnablePush={onEnablePush}
           onReservationTap={onReservationTap}
           onGapActionTap={onGapActionTap}

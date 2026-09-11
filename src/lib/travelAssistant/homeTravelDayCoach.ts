@@ -3,6 +3,7 @@
  * Surfaces stored ticket artifacts first; honest BRI transfer cue without invented gates.
  */
 
+import { buildBriAfterTrainCoachSteps } from "@/lib/travelAssistant/briAirportFacts";
 import { canonicalFlightDepartureDay } from "@/lib/travelAssistant/tripWindow";
 import type { HomeNextAction } from "@/lib/travelAssistant/homeNextAction";
 import {
@@ -32,6 +33,12 @@ export interface HomeTravelDayFlight {
   provider?: string;
 }
 
+export interface TravelDayWalkthroughStep {
+  id: string;
+  title: string;
+  detail: string;
+}
+
 export interface HomeTravelDayCoach {
   dateKey: string;
   dayLabel: string;
@@ -42,6 +49,7 @@ export interface HomeTravelDayCoach {
   leaveCue: string | null;
   airportTransferHint: string | null;
   hasTrainBeforeFlight: boolean;
+  walkthroughSteps: TravelDayWalkthroughStep[];
 }
 
 function formatShortDayLabel(dateKey: string, timezone?: string | null): string {
@@ -113,6 +121,124 @@ export function buildBriAirportTransferHint(input: {
 function trainEndsAtBari(reservation: HomeStayReservation): boolean {
   const blob = `${reservation.location ?? ""} ${reservation.title ?? ""}`.toLowerCase();
   return /\bbari\b/u.test(blob);
+}
+
+function trainDepartsBariCentraleFnB(reservation: HomeStayReservation): boolean {
+  const blob = `${reservation.location ?? ""} ${reservation.title ?? ""}`.toLowerCase();
+  return /\bbari\b/u.test(blob) && /\b(fnb|c\.le|centrale)\b/u.test(blob);
+}
+
+function formatPassengerTicketNote(handoff: TrainTicketHandoffContent | undefined): string | null {
+  const tickets = handoff?.passengerTickets ?? [];
+  if (tickets.length === 0) return null;
+  const names = tickets.map((ticket) => ticket.passengerName.trim()).filter(Boolean);
+  if (names.length === 0) return `${tickets.length} stored ticket${tickets.length === 1 ? "" : "s"} in Kepi`;
+  return `Stored tickets for ${names.join(" and ")}`;
+}
+
+/** Step-by-step travel-day walkthrough from stored bookings + verified BRI facts only. */
+export function buildTravelDayWalkthroughSteps(input: {
+  trains: TrainTicketSourceReservation[];
+  trainHandoffs: TrainTicketHandoffContent[];
+  flight: HomeTravelDayFlight | null;
+}): TravelDayWalkthroughStep[] {
+  const steps: TravelDayWalkthroughStep[] = [];
+  const flightFromBri = (input.flight?.flightDepartureAirport?.trim().toUpperCase() ?? "") === "BRI";
+
+  input.trains.forEach((train, index) => {
+    const handoff = input.trainHandoffs[index];
+    const trainNo = train.trainNumber?.trim() || train.title?.trim() || "Train";
+    const route = train.location?.trim() || "";
+    const dep = formatLocalTime(train.localTime);
+    const paxNote = formatPassengerTicketNote(handoff);
+    const detailParts = [
+      dep ? `Departs ${dep}` : null,
+      train.confirmationCode?.trim() ? `Confirmation ${train.confirmationCode.trim()}` : null,
+      paxNote,
+    ].filter(Boolean);
+
+    steps.push({
+      id: `train-${train.id}`,
+      title: `${trainNo}${route ? ` · ${route}` : ""}`,
+      detail: detailParts.join(" · ") || "Your booked train for today.",
+    });
+
+    if (index === 0 && trainEndsAtBari(train) && input.trains.length > 1) {
+      steps.push({
+        id: "after-bari-centrale",
+        title: "After you alight at Bari Centrale",
+        detail:
+          "Leave the Frecciargento and follow signs inside Bari Centrale to the Ferrovie Nord Barese (FNB) platforms for your airport connection train.",
+      });
+    }
+  });
+
+  const airportConnector = input.trains.find((train) => trainDepartsBariCentraleFnB(train));
+  if (airportConnector && flightFromBri) {
+    const connectorHandoff = input.trainHandoffs.find(
+      (handoff) => handoff.reservationId === airportConnector.id,
+    );
+    const dep = formatLocalTime(airportConnector.localTime);
+    const paxNote = formatPassengerTicketNote(connectorHandoff);
+    const connectorDetail = [
+      dep ? `Departs ${dep} from BARI C.LE FNB` : "Departs from BARI C.LE FNB",
+      "Arrives Bari Aeroporto Karol Wojtyła rail station",
+      paxNote,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    const connectorIndex = steps.findIndex((step) => step.id === `train-${airportConnector.id}`);
+    if (connectorIndex >= 0) {
+      steps[connectorIndex] = {
+        ...steps[connectorIndex],
+        detail: connectorDetail,
+      };
+    }
+  }
+
+  if (flightFromBri && input.flight && airportConnector) {
+    steps.push(...buildBriAfterTrainCoachSteps());
+
+    const flightNo = input.flight.flightNumber?.trim() || "Flight";
+    const provider = input.flight.provider?.trim() || "ITA Airways";
+    const dep = formatLocalTime(input.flight.flightDepartureTime);
+    const to = input.flight.flightArrivalAirport?.trim() || "VCE";
+    const arrTerminal = input.flight.flightArrivalTerminal?.trim();
+    steps.push({
+      id: "flight-departure",
+      title: `${provider} ${flightNo} · BRI → ${to}${dep ? ` · departs ${dep}` : ""}`,
+      detail: [
+        input.flight.confirmationCode?.trim()
+          ? `Confirmation ${input.flight.confirmationCode.trim()}`
+          : null,
+        arrTerminal ? `Arrive Terminal ${arrTerminal}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "Your booked flight today.",
+    });
+  } else if (input.flight) {
+    const flightNo = input.flight.flightNumber?.trim() || "Flight";
+    const from = input.flight.flightDepartureAirport?.trim() || "";
+    const to = input.flight.flightArrivalAirport?.trim() || "";
+    const dep = formatLocalTime(input.flight.flightDepartureTime);
+    steps.push({
+      id: "flight-departure",
+      title: `${flightNo}${from && to ? ` · ${from} → ${to}` : ""}${dep ? ` · departs ${dep}` : ""}`,
+      detail: [
+        input.flight.confirmationCode?.trim()
+          ? `Confirmation ${input.flight.confirmationCode.trim()}`
+          : null,
+        input.flight.flightArrivalTerminal
+          ? `Arrive Terminal ${input.flight.flightArrivalTerminal}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "Your booked flight today.",
+    });
+  }
+
+  return steps;
 }
 
 export function buildHomeTravelDayCoach(input: {
@@ -192,6 +318,12 @@ export function buildHomeTravelDayCoach(input: {
     return input.flightLeaveByHint ?? null;
   })();
 
+  const walkthroughSteps = buildTravelDayWalkthroughSteps({
+    trains,
+    trainHandoffs,
+    flight,
+  });
+
   return {
     dateKey: input.dateKey,
     dayLabel,
@@ -202,6 +334,7 @@ export function buildHomeTravelDayCoach(input: {
     leaveCue,
     airportTransferHint,
     hasTrainBeforeFlight,
+    walkthroughSteps,
   };
 }
 
