@@ -5,6 +5,10 @@
  */
 
 import {
+  buildFlightBoardingPassSourceLink,
+  formatBoardingPassPdfFilename,
+} from "@/lib/travelAssistant/flightBoardingPassIngest";
+import {
   buildPassengerTicketSourceLinks,
   type NamedPdfAttachment,
 } from "@/lib/travelAssistant/railPassengerTicketLinks";
@@ -64,6 +68,90 @@ export const BARI_VENICE_PDF_ATTACHMENTS: NamedPdfAttachment[] = [
   { filename: STEPHANIE_PDF_FILENAME, text: TRENITALIA_STEPHANIE_PDF_TEXT },
   { filename: JEFFERY_PDF_FILENAME, text: TRENITALIA_JEFFERY_PDF_TEXT },
 ];
+
+export const ITA_STEPHANIE_BRI_FCO_BOARDING_TEXT = `
+ITA Airways Boarding Pass
+Passenger: Stephanie Russell
+Reservation code Z84T4Z
+BRI - FCO
+12/09/2026
+`.trim();
+
+export const ITA_JEFFERY_BRI_FCO_BOARDING_TEXT = `
+ITA Airways Boarding Pass
+Passenger: Jeffery Paul Russell
+Reservation code Z84T4Z
+BRI - FCO
+12/09/2026
+`.trim();
+
+export const ITA_STEPHANIE_FCO_VCE_BOARDING_TEXT = `
+ITA Airways Boarding Pass
+Passenger: Stephanie Russell
+Reservation code Z84T4Z
+FCO - VCE
+12/09/2026
+`.trim();
+
+export const ITA_JEFFERY_FCO_VCE_BOARDING_TEXT = `
+ITA Airways Boarding Pass
+Passenger: Jeffery Paul Russell
+Reservation code Z84T4Z
+FCO - VCE
+12/09/2026
+`.trim();
+
+function boardingPassSections(): string {
+  const sections = [
+    formatNamedPdfSection(
+      formatBoardingPassPdfFilename("Stephanie Russell", { dep: "BRI", arr: "FCO" }),
+      ITA_STEPHANIE_BRI_FCO_BOARDING_TEXT,
+    ),
+    formatNamedPdfSection(
+      formatBoardingPassPdfFilename("Jeffery Paul Russell", { dep: "BRI", arr: "FCO" }),
+      ITA_JEFFERY_BRI_FCO_BOARDING_TEXT,
+    ),
+    formatNamedPdfSection(
+      formatBoardingPassPdfFilename("Stephanie Russell", { dep: "FCO", arr: "VCE" }),
+      ITA_STEPHANIE_FCO_VCE_BOARDING_TEXT,
+    ),
+    formatNamedPdfSection(
+      formatBoardingPassPdfFilename("Jeffery Paul Russell", { dep: "FCO", arr: "VCE" }),
+      ITA_JEFFERY_FCO_VCE_BOARDING_TEXT,
+    ),
+  ];
+  return sections.filter(Boolean).join("\n\n");
+}
+
+function flightBoardingPassLinks(): ReservationSourceLink[] {
+  const reservationId = "flight-bri-vce";
+  return [
+    buildFlightBoardingPassSourceLink({
+      tripId: BARI_VENICE_TRIP_ID,
+      reservationId,
+      passengerName: "Stephanie Russell",
+      route: { dep: "BRI", arr: "FCO" },
+    }),
+    buildFlightBoardingPassSourceLink({
+      tripId: BARI_VENICE_TRIP_ID,
+      reservationId,
+      passengerName: "Jeffery Paul Russell",
+      route: { dep: "BRI", arr: "FCO" },
+    }),
+    buildFlightBoardingPassSourceLink({
+      tripId: BARI_VENICE_TRIP_ID,
+      reservationId,
+      passengerName: "Stephanie Russell",
+      route: { dep: "FCO", arr: "VCE" },
+    }),
+    buildFlightBoardingPassSourceLink({
+      tripId: BARI_VENICE_TRIP_ID,
+      reservationId,
+      passengerName: "Jeffery Paul Russell",
+      route: { dep: "FCO", arr: "VCE" },
+    }),
+  ];
+}
 
 export function buildBariVeniceStoredSourceText(): string {
   return BARI_VENICE_PDF_ATTACHMENTS
@@ -134,6 +222,9 @@ export const BARI_VENICE_SEP_12_RESERVATIONS = [
     flightArrivalTerminal: "1",
     flightConnectionStops: 1,
     timezone: "Europe/Rome",
+    hasPdfAttachment: true,
+    originalEmailText: boardingPassSections(),
+    sourceLinks: flightBoardingPassLinks(),
   },
   {
     id: "venice-airbnb",

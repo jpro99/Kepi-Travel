@@ -27,6 +27,10 @@ import {
   type TrainTicketSourceReservation,
 } from "@/lib/travelAssistant/trainTicketHandoff";
 import { trainReservationsOnDayExpanded } from "@/lib/travelAssistant/travelDayTrainExpand";
+import {
+  resolveFlightBoardingPassesForDay,
+  type FlightBoardingPassHandoffContent,
+} from "@/lib/travelAssistant/flightBoardingPassHandoff";
 
 export interface HomeTravelDayFlight {
   id: string;
@@ -53,6 +57,7 @@ export interface HomeTravelDayCoach {
   headline: string;
   leadDetail: string;
   trainHandoffs: TrainTicketHandoffContent[];
+  flightBoardingHandoffs: FlightBoardingPassHandoffContent[];
   flight: HomeTravelDayFlight | null;
   leaveCue: string | null;
   airportTransferHint: string | null;
@@ -364,6 +369,11 @@ export function buildHomeTravelDayCoach(input: {
     .map((train) => buildTrainTicketHandoffContent(train, input.tripId))
     .filter((content): content is TrainTicketHandoffContent => Boolean(content));
 
+  const flightBoardingHandoffs = resolveFlightBoardingPassesForDay(
+    input.reservations,
+    input.dateKey,
+  );
+
   const primaryTrain = trains[0] ?? null;
   const lastTrain = trains[trains.length - 1] ?? null;
   const lastTrainDepartureUtcMs = lastTrain
@@ -419,6 +429,7 @@ export function buildHomeTravelDayCoach(input: {
     headline,
     leadDetail,
     trainHandoffs,
+    flightBoardingHandoffs,
     flight,
     leaveCue,
     airportTransferHint,

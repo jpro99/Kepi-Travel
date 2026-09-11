@@ -46,6 +46,10 @@ import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardRevie
 import { getFewShotExamplesForEmail } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
 import {
+  ingestBoardingPassForward,
+  isBoardingPassForwardEmail,
+} from "@/lib/travelAssistant/flightBoardingPassIngest";
+import {
   buildPassengerTicketSourceLinks,
   mergePassengerTicketLinks,
 } from "@/lib/travelAssistant/railPassengerTicketLinks";
@@ -693,6 +697,30 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     };
     // Day-plan Word docs are not booking confirmations — skip reservation import entirely.
     const draftsToImport = selectDraftsToImport(parserDraftRecords, isDayPlanForward);
+    const boardingPassIngest = isBoardingPassForwardEmail(parserSubject, parserText)
+      ? ingestBoardingPassForward({
+          subject: parserSubject,
+          text: parserText,
+          storedSourceText,
+          emailId,
+          tripId: targetTrip.id,
+          reservations: nextReservations,
+          pdfAttachments,
+        })
+      : null;
+
+    if (boardingPassIngest?.handled) {
+      nextReservations = boardingPassIngest.reservations;
+      acceptedDraftCount += boardingPassIngest.mergedCount;
+      routeLogger.info("Boarding pass artifacts merged into flight reservation.", {
+        userId: targetUserId,
+        tripId: targetTrip.id,
+        mergedCount: boardingPassIngest.mergedCount,
+        missingLegs: boardingPassIngest.missingLegs,
+      });
+    }
+
+    if (!boardingPassIngest?.handled) {
     for (const parserDraftRecord of draftsToImport) {
       const draftPrimaryDate = reservationPrimaryDate({
         type: typeof parserDraftRecord.type === "string" ? parserDraftRecord.type : undefined,
@@ -1309,6 +1337,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         missingFields: draftMissingFields,
       });
       acceptedDraftCount += 1;
+    }
     }
 
     // Narrative Word/email day plans → Plan tab day notes (not reservation cards).

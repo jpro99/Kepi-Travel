@@ -333,6 +333,25 @@ test("G55: hasActiveTravelDayCoach true on Sep 12 even when next remaining fligh
   assert.equal(snap.nextFlight?.id, "flight-bri-vce");
 });
 
+test("G56: Sep 12 travel day coach surfaces per-leg boarding passes for both passengers", () => {
+  const coach = buildHomeTravelDayCoach({
+    reservations: BARI_VENICE_SEP_12,
+    dateKey: "2026-09-12",
+    timezone: "Europe/Rome",
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.ok(coach);
+  assert.equal(coach!.flightBoardingHandoffs.length, 2);
+  const labels = coach!.flightBoardingHandoffs.map((row) => row.legLabel);
+  assert.ok(labels.includes("BRI → FCO"));
+  assert.ok(labels.includes("FCO → VCE"));
+  for (const handoff of coach!.flightBoardingHandoffs) {
+    assert.equal(handoff.passengerTickets.length, 2);
+    assert.match(handoff.passengerTickets[0]!.actionUrl, /passenger=/i);
+    assert.match(handoff.passengerTickets[0]!.actionUrl, /leg=/i);
+  }
+});
+
 test("G55: mid-stay next action still uses next travel day coach on Sep 11", () => {
   const coach = buildHomeTodayCoach({
     reservations: BARI_VENICE_SEP_12,

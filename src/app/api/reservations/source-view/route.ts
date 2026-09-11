@@ -57,6 +57,7 @@ export async function GET(req: Request) {
   const tripId = url.searchParams.get("tripId")?.trim() ?? "";
   const reservationId = url.searchParams.get("reservationId")?.trim() ?? "";
   const passengerSlug = url.searchParams.get("passenger")?.trim().toLowerCase() ?? "";
+  const legSlug = url.searchParams.get("leg")?.trim().toLowerCase() ?? "";
   if (!tripId || !reservationId) {
     return NextResponse.json({ error: "tripId and reservationId are required" }, { status: 400 });
   }
@@ -111,12 +112,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "No source email stored for this reservation" }, { status: 404 });
   }
 
-  const passengerSection = passengerSlug ? extractNamedPdfSection(storedText, passengerSlug) : null;
+  const passengerSection = passengerSlug
+    ? extractNamedPdfSection(storedText, passengerSlug, legSlug || undefined)
+    : null;
   const displayText = passengerSection ?? storedText;
 
   return new NextResponse(
     renderEmailPage({
-      subject: passengerSection ? `${subject} — ${passengerSlug}` : subject,
+      subject: passengerSection
+        ? `${subject} — ${[passengerSlug, legSlug].filter(Boolean).join(" · ")}`
+        : subject,
       bodyHtml: `<pre>${escapeHtml(displayText)}</pre>`,
       reservationTitle: reservation.title || reservation.provider,
     }),

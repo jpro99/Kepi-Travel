@@ -1020,6 +1020,23 @@ export function MissionControlView({
                 />
               ))
             ) : null}
+            {travelDayCoach.flightBoardingHandoffs.length > 0
+              ? travelDayCoach.flightBoardingHandoffs.map((handoff) => (
+                  <TrainTicketHandoffCard
+                    key={`${handoff.reservationId}-${handoff.legLabel}`}
+                    content={{
+                      reservationId: handoff.reservationId,
+                      headline: handoff.headline,
+                      detail: handoff.detail,
+                      primaryActionLabel: "Boarding passes",
+                      primaryActionUrl: handoff.passengerTickets[0]?.actionUrl ?? "",
+                      passengerTickets: handoff.passengerTickets,
+                      honestyNote: handoff.honestyNote,
+                    }}
+                    eyebrow={`Boarding passes · ${travelDayCoach.dayLabel}`}
+                  />
+                ))
+              : null}
             {travelDayCoach.walkthroughSteps.length > 0 &&
             travelDayCoach.briAirportCoachSteps.length === 0 ? (
               <div className="rounded-xl bg-white px-3 py-3 text-left">

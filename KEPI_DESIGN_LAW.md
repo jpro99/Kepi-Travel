@@ -247,6 +247,9 @@ On a calendar travel day with booked train + flight (e.g. Lecce→Bari Centrale 
 
 **Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`
 
+**G56 — ITA boarding passes: per passenger, per leg, stored not invented**  
+Forwarded airline boarding-pass emails/PDFs ingest via the trips forward path (same named-PDF artifact model as Trenitalia). Store one artifact per passenger per segment (e.g. BRI→FCO and FCO→VCE for Stephanie + Jeffery under Z84T4Z). Travel-day Home surfaces boarding-pass CTAs per leg with both-passenger buttons — mirror train ticket handoff. Never invent gate, seat, or flight numbers not in the stored email/PDF.
+
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`
 
@@ -1116,6 +1119,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G53 | `src/lib/travelAssistant/gateStringPath.test.ts`, `src/lib/travelAssistant/dayOfStatusChrome.test.ts`, `src/lib/travelAssistant/softTripRefresh.test.ts` |
 | G54 | `src/lib/travelAssistant/ec261Coach.test.ts` |
 | G55 | `src/lib/travelAssistant/homeTravelDayCoach.test.ts`, `src/lib/support/tripHelpAnswer.test.ts` |
+| G56 | `src/lib/travelAssistant/flightBoardingPassIngest.test.ts`, `src/lib/travelAssistant/flightBoardingPassHandoff.test.ts`, `src/lib/travelAssistant/homeTravelDayCoach.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |
