@@ -136,6 +136,41 @@ const NEXT_REMAINING_BEHIND_GRACE_MS = 2 * 60 * 60_000;
  * Next remaining flight = earliest booked segment whose departure is still ahead
  * in clock time (timezone-aware). Storage order and long-haul role are ignored (F15).
  */
+/**
+ * When multiple flights depart the same travel day (e.g. BRI→FCO connector + BRI→VCE long-haul),
+ * pick the flight that follows today's train chain — not the earliest BRI departure alone.
+ */
+export function selectTravelDayPrimaryFlight<T extends FlightSortFields>(
+  flights: readonly T[],
+  options?: { afterTrainDepartureUtcMs?: number | null },
+): T | null {
+  const sorted = sortFlightsByDeparture(flights);
+  if (sorted.length === 0) return null;
+  if (sorted.length === 1) return sorted[0];
+
+  const afterMs = options?.afterTrainDepartureUtcMs;
+  let pool = sorted;
+  if (afterMs != null && Number.isFinite(afterMs)) {
+    const afterTrain = sorted.filter((flight) => {
+      const ms = flightDepartureUtcMs(flight);
+      return Number.isFinite(ms) && ms >= afterMs;
+    });
+    if (afterTrain.length > 0) pool = afterTrain;
+  }
+
+  const briDepartures = pool.filter(
+    (flight) => (flight.flightDepartureAirport ?? "").trim().toUpperCase() === "BRI",
+  );
+  if (briDepartures.length > 1) {
+    const venice = briDepartures.find(
+      (flight) => (flight.flightArrivalAirport ?? "").trim().toUpperCase() === "VCE",
+    );
+    if (venice) return venice;
+  }
+
+  return pool[pool.length - 1] ?? sorted[sorted.length - 1] ?? null;
+}
+
 export function selectNextRemainingFlight<T extends FlightSortFields>(
   reservations: readonly T[],
   nowMs: number = Date.now(),

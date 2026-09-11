@@ -27,6 +27,12 @@ function isIosSafari(): boolean {
   return /iPad|iPhone|iPod/iu.test(navigator.userAgent);
 }
 
+function isDesktopSafari(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Safari/iu.test(ua) && !/Chrome|Chromium|Android/iu.test(ua) && !isIosSafari();
+}
+
 function isAndroid(): boolean {
   if (typeof navigator === "undefined") return false;
   return /Android/iu.test(navigator.userAgent);
@@ -102,6 +108,7 @@ export function buildAndroidNotificationSettingsGuide(input?: {
 
 /** Honest copy when the user previously blocked notifications — Chrome cannot re-prompt. */
 export function buildBlockedNotificationHelp(): string {
+  const host = readNotificationSiteHostname();
   if (isIosSafari()) {
     return (
       "Notifications are blocked for Kepi. On iPhone: Settings → Notifications → Kepi → Allow Notifications, " +
@@ -111,10 +118,15 @@ export function buildBlockedNotificationHelp(): string {
   if (isAndroid()) {
     return buildAndroidNotificationSettingsGuide({ blocked: true, includeNeverPromptedNote: false });
   }
-  const host = readNotificationSiteHostname();
+  if (isDesktopSafari()) {
+    return (
+      `Notifications are blocked for ${host}. In Safari: click the website settings button (lock or AA icon) in the address bar → ` +
+      "Settings for This Website → Notifications → Allow. Then return here and tap Enable again."
+    );
+  }
   return (
-    `Notifications are blocked for Kepi. Open your browser site settings, allow notifications for ${host}, ` +
-    "then return here and tap Enable again."
+    `Notifications are blocked for ${host}. Click the lock or site-info icon in the address bar → Site settings → ` +
+    "Notifications → Allow. Then return here and tap Enable again."
   );
 }
 

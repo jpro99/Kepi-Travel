@@ -56,8 +56,8 @@ import {
   travelerTodayKey,
 } from "@/lib/travelAssistant/homeTodayCoach";
 import {
-  buildHomeTravelDayCoach,
   homeTravelDayCoachNextAction,
+  resolveTodayTravelDayCoach,
   resolveTomorrowTravelDayCoach,
 } from "@/lib/travelAssistant/homeTravelDayCoach";
 import {
@@ -469,27 +469,32 @@ export function MissionControlView({
   const travelDayCoach = useMemo(() => {
     if (!showTravelOps) return null;
     if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
-    if (snap.phase === "departure_day") {
-      return buildHomeTravelDayCoach({
-        reservations,
-        dateKey: calendarTodayKey,
-        timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
-        tripId,
-        flightLeaveByHint: snap.leaveByHint,
-      });
-    }
-    return null;
+    const coach = resolveTodayTravelDayCoach({
+      reservations,
+      timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+      tripId,
+      flightLeaveByHint: snap.leaveByHint,
+    });
+    if (!coach) return null;
+    if (coach.trainHandoffs.length === 0 && !coach.flight) return null;
+    return coach;
   }, [
     showTravelOps,
-    snap.phase,
     snap.leaveByHint,
     journeyPhase?.kind,
     reservations,
-    calendarTodayKey,
     travelerTimezone,
     snap.tonightHotel,
     tripId,
   ]);
+
+  const effectiveNextFlight = useMemo(() => {
+    if (travelDayCoach?.flight?.id) {
+      const booked = reservations.find((row) => row.id === travelDayCoach.flight!.id);
+      if (booked) return booked;
+    }
+    return snap.nextFlight;
+  }, [travelDayCoach?.flight?.id, reservations, snap.nextFlight]);
 
   const tomorrowTravelDayCoach = useMemo(() => {
     if (!showTravelOps || snap.phase !== "at_destination") return null;
@@ -577,12 +582,12 @@ export function MissionControlView({
         prepWatchItems,
         prepMode,
         unresolvedReviewCount,
-        nextFlight: snap.nextFlight,
-        leaveByHint: snap.leaveByHint,
-        liveDepartureGate: snap.nextFlight
-          ? liveStatus?.[snap.nextFlight.id]?.departureGate
+        nextFlight: effectiveNextFlight,
+        leaveByHint: travelDayCoach?.leaveCue ?? snap.leaveByHint,
+        liveDepartureGate: effectiveNextFlight
+          ? liveStatus?.[effectiveNextFlight.id]?.departureGate
           : undefined,
-        storedDepartureGate: snap.nextFlight?.flightDepartureGate,
+        storedDepartureGate: effectiveNextFlight?.flightDepartureGate,
         connectionCalm,
         airportSpotlight: travelDayCoach?.hasTrainBeforeFlight ? null : airportSpotlight,
         strandedPrompt: showStrandedCard ? strandedDetection.prompt : null,
@@ -594,7 +599,8 @@ export function MissionControlView({
       locationStatus,
       snap.openAirportMode,
       snap.attentionTop3,
-      snap.nextFlight,
+      effectiveNextFlight,
+      travelDayCoach?.leaveCue,
       snap.leaveByHint,
       atAirport,
       prepWatchItems,
@@ -621,16 +627,17 @@ export function MissionControlView({
 
   // I36 — Wallet-grade travel day: one headline, one CTA, nothing else.
   if (travelTakeover) {
-    const gate = snap.nextFlight ? liveStatus?.[snap.nextFlight.id]?.departureGate : null;
-    const routeLabel = snap.nextFlight
-      ? `${snap.nextFlight.flightDepartureAirport ?? ""} → ${snap.nextFlight.flightArrivalAirport ?? ""}`
+    const takeoverFlight = effectiveNextFlight;
+    const gate = takeoverFlight ? liveStatus?.[takeoverFlight.id]?.departureGate : null;
+    const routeLabel = takeoverFlight
+      ? `${takeoverFlight.flightDepartureAirport ?? ""} → ${takeoverFlight.flightArrivalAirport ?? ""}`
       : snap.identityLabel;
 
     let eyebrow = snap.phase === "departure_day" ? "Today" : "Travel day";
-    let title = snap.leaveByHint || "You're traveling today";
+    let title = (travelDayCoach?.leaveCue ?? snap.leaveByHint) || "You're traveling today";
     let detail: string | null =
-      snap.phase === "departure_day" && snap.nextFlight
-        ? formatTravelDayFlightLabel(snap.nextFlight)
+      snap.phase === "departure_day" && takeoverFlight
+        ? formatTravelDayFlightLabel(takeoverFlight)
         : routeLabel;
     let tone: "blue" | "green" = "blue";
 
@@ -658,15 +665,15 @@ export function MissionControlView({
       title = walk.next.title;
       detail =
         walk.next.detail ??
-        (snap.nextFlight
-          ? `${snap.nextFlight.flightNumber || "Flight"} · ${routeLabel}`
+        (takeoverFlight
+          ? `${takeoverFlight.flightNumber || "Flight"} · ${routeLabel}`
           : "Your next steps are on the airport map");
-    } else if (snap.leaveByHint) {
-      title = snap.leaveByHint;
+    } else if (travelDayCoach?.leaveCue ?? snap.leaveByHint) {
+      title = travelDayCoach?.leaveCue ?? snap.leaveByHint ?? title;
       detail = gate
         ? `Gate ${gate} · ${routeLabel}`
-        : snap.nextFlight
-          ? `${snap.nextFlight.flightNumber || "Flight"} · ${routeLabel}`
+        : takeoverFlight
+          ? `${takeoverFlight.flightNumber || "Flight"} · ${routeLabel}`
           : detail;
     }
 
@@ -696,7 +703,7 @@ export function MissionControlView({
           <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/70">{eyebrow}</p>
           <h2 className="mt-2 text-[28px] font-semibold tracking-tight leading-tight">{title}</h2>
           {detail ? <p className="mt-2 text-[17px] text-white/85">{detail}</p> : null}
-          {connectionCalm.kind === "conflict" && connectionCalm.line ? (
+          {!travelDayLead && connectionCalm.kind === "conflict" && connectionCalm.line ? (
             <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-[14px] font-medium text-white">
               {connectionCalm.line}
             </p>
@@ -1091,7 +1098,7 @@ export function MissionControlView({
           </div>
         ) : null}
 
-        {showTravelOps && connectionCalm.line ? (
+        {showTravelOps && !travelDayLead && connectionCalm.line ? (
           <p
             className={`mt-3 rounded-xl px-3 py-2 text-[14px] font-medium ${
               connectionCalm.kind === "conflict"
@@ -1147,25 +1154,31 @@ export function MissionControlView({
           </div>
         ) : null}
 
-        {showTravelOps && snap.nextFlight && (zoom === "today" || snap.phase === "departure_day" || stayCoachLead) ? (
+        {showTravelOps &&
+        !travelDayLead &&
+        effectiveNextFlight &&
+        (zoom === "today" || snap.phase === "departure_day" || stayCoachLead) ? (
           <button
             type="button"
-            onClick={() => onReservationTap?.(snap.nextFlight!.id)}
+            onClick={() => onReservationTap?.(effectiveNextFlight!.id)}
             className="mt-3 w-full rounded-xl bg-white px-3 py-3 text-left"
           >
             <p className="text-[13px] font-semibold text-[#6E6E73]">
               {stayCoachLead ? "Next flight" : "Next flight"}
             </p>
             <p className="mt-0.5 text-[16px] font-semibold text-[#1D1D1F]">
-              {snap.nextFlight.flightNumber || "Flight"} ·{" "}
-              {snap.nextFlight.flightDepartureAirport} → {snap.nextFlight.flightArrivalAirport}
+              {effectiveNextFlight.flightNumber || "Flight"} ·{" "}
+              {effectiveNextFlight.flightDepartureAirport} → {effectiveNextFlight.flightArrivalAirport}
             </p>
             <p className="mt-1 text-[14px] text-[#007AFF]">
               {formatFlightStatusTrustLine({
-                ...nextFlightLive,
-                bookedGate: snap.nextFlight.flightDepartureGate,
-                bookedStatus: nextFlightLive?.bookedStatus,
-                departureIata: snap.nextFlight.flightDepartureAirport,
+                ...(effectiveNextFlight.id === snap.nextFlight?.id ? nextFlightLive : undefined),
+                bookedGate: effectiveNextFlight.flightDepartureGate,
+                bookedStatus:
+                  effectiveNextFlight.id === snap.nextFlight?.id
+                    ? nextFlightLive?.bookedStatus
+                    : undefined,
+                departureIata: effectiveNextFlight.flightDepartureAirport,
               })}
             </p>
             {dayOfStatusChrome?.badge && !dayOfStatusChrome.banner ? (

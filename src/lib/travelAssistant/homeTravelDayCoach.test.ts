@@ -6,10 +6,12 @@ import {
   buildHomeTravelDayCoach,
   buildTravelDayWalkthroughSteps,
   dayHasBookedTravelMoves,
+  hasActiveTravelDayCoach,
   homeTravelDayCoachNextAction,
   resolveTomorrowTravelDayCoach,
   resolveTodayTravelDayCoach,
 } from "@/lib/travelAssistant/homeTravelDayCoach";
+import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
 import { buildHomeTodayCoach, homeTodayCoachNextAction } from "@/lib/travelAssistant/homeTodayCoach";
 import { coverHopWithBookedFacts } from "@/lib/travelAssistant/bookedHopCoverage";
 import { buildPlannedFlightLegs } from "@/lib/travelAssistant/tripPlanBooking";
@@ -247,6 +249,48 @@ test("buildBriAirportTransferHint stays honest — no invented gate", () => {
   assert.ok(hint);
   assert.match(hint!, /does not have verified BRI/i);
   assert.doesNotMatch(hint!, /\bgate\s+[A-Z]\d{1,2}\b/i);
+});
+
+test("G55: hasActiveTravelDayCoach true on Sep 12 even when next remaining flight is later connector", () => {
+  const nowMs = SEP_12_MORNING;
+  const reservations = [
+    ...BARI_VENICE_SEP_12,
+    {
+      id: "az1616-connector",
+      type: "flight",
+      title: "ITA AZ1616",
+      provider: "ITA Airways",
+      localTime: "2026-09-14 10:00",
+      timezone: "Europe/Rome",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "FCO",
+      flightDepartureTime: "2026-09-14 10:00",
+      flightNumber: "AZ1616",
+      flightDate: "2026-09-14",
+    },
+  ];
+  assert.equal(
+    hasActiveTravelDayCoach({
+      reservations,
+      nowMs,
+      timezone: "Europe/Rome",
+      tripId: BARI_VENICE_TRIP_ID,
+    }),
+    true,
+  );
+  const snap = buildMissionControlSnapshot(
+    {
+      name: "Europe 2026",
+      startDate: "2026-09-01",
+      endDate: "2026-09-28",
+      reservations,
+      travelerTimezone: "Europe/Rome",
+      hasActiveTrip: true,
+    },
+    nowMs,
+  );
+  assert.equal(snap.phase, "departure_day");
+  assert.equal(snap.nextFlight?.id, "flight-bri-vce");
 });
 
 test("G55: mid-stay next action still uses next travel day coach on Sep 11", () => {

@@ -113,6 +113,39 @@ test("readNotificationSiteHostname returns window hostname", () => {
   });
 });
 
+test("buildBlockedNotificationHelp on desktop Safari uses hostname and address-bar settings path", () => {
+  const originalNavigator = globalThis.navigator;
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: { hostname: "kepi-travel-preview.vercel.app" },
+      matchMedia: () => ({ matches: false }),
+    },
+  });
+
+  const message = buildBlockedNotificationHelp();
+  assert.match(message, /kepi-travel-preview\.vercel\.app/);
+  assert.match(message, /address bar/i);
+  assert.match(message, /Notifications/i);
+
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: originalNavigator,
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: originalWindow,
+  });
+});
+
 test("readNotificationPermissionState returns unsupported without Notification API", () => {
   const originalNotification = (globalThis as { Notification?: unknown }).Notification;
   (globalThis as { Notification?: unknown }).Notification = undefined;

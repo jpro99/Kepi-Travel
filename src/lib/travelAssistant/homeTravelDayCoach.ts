@@ -4,6 +4,10 @@
  */
 
 import { buildBriAfterTrainCoachSteps } from "@/lib/travelAssistant/briAirportFacts";
+import {
+  flightDepartureUtcMs,
+  selectTravelDayPrimaryFlight,
+} from "@/lib/travelAssistant/flightSort";
 import { canonicalFlightDepartureDay } from "@/lib/travelAssistant/tripWindow";
 import type { HomeNextAction } from "@/lib/travelAssistant/homeNextAction";
 import {
@@ -261,7 +265,18 @@ export function buildHomeTravelDayCoach(input: {
     .filter((content): content is TrainTicketHandoffContent => Boolean(content));
 
   const primaryTrain = trains[0] ?? null;
-  const primaryFlight = flights[0] ?? null;
+  const lastTrain = trains[trains.length - 1] ?? null;
+  const lastTrainDepartureUtcMs = lastTrain
+    ? flightDepartureUtcMs({
+        localTime: lastTrain.localTime,
+        timezone: lastTrain.timezone,
+        flightDepartureTime: lastTrain.localTime,
+      })
+    : null;
+  const primaryFlight =
+    selectTravelDayPrimaryFlight(flights, { afterTrainDepartureUtcMs: lastTrainDepartureUtcMs }) ??
+    flights[0] ??
+    null;
 
   const flight: HomeTravelDayFlight | null = primaryFlight
     ? {
@@ -366,6 +381,19 @@ export function resolveTodayTravelDayCoach(input: {
     tripId: input.tripId,
     flightLeaveByHint: input.flightLeaveByHint,
   });
+}
+
+/** True when Home should lead with the full train+flight travel-day coach (suppress Ask Kepi / mid-stay). */
+export function hasActiveTravelDayCoach(input: {
+  reservations: HomeStayReservation[];
+  nowMs?: number;
+  timezone?: string | null;
+  tripId?: string | null;
+  flightLeaveByHint?: string | null;
+}): boolean {
+  const coach = resolveTodayTravelDayCoach(input);
+  if (!coach) return false;
+  return coach.trainHandoffs.length > 0 || coach.flight != null;
 }
 
 /** Eve-before preview: tomorrow is a multi-segment travel day. */
