@@ -33,6 +33,7 @@ export interface HomeTravelDayFlight {
   flightDepartureTime?: string;
   flightArrivalTime?: string;
   flightArrivalTerminal?: string;
+  flightConnectionStops?: number;
   confirmationCode?: string | null;
   provider?: string;
 }
@@ -102,23 +103,47 @@ function trainHeadline(
   return bits.join(" · ") || route;
 }
 
-/** Stored-booking flight lead — never invent a flight number when the field is empty. */
+function formatFlightConnectionStops(stops?: number | null): string | null {
+  if (stops == null || !Number.isFinite(stops)) return null;
+  if (stops === 0) return "Nonstop";
+  if (stops === 1) return "1 stop";
+  return `${stops} stops`;
+}
+
+function formatFlightTimeRange(
+  departureTime?: string,
+  arrivalTime?: string,
+): string | null {
+  const dep = formatLocalTime(departureTime);
+  const arr = formatLocalTime(arrivalTime);
+  if (dep && arr) return `${dep}–${arr}`;
+  if (dep) return `departs ${dep}`;
+  if (arr) return `arrives ${arr}`;
+  return null;
+}
+
+function formatArrivalTerminalLabel(arrivalAirport?: string, terminal?: string): string | null {
+  const to = arrivalAirport?.trim() || "";
+  const term = terminal?.trim();
+  if (to && term) return `${to} T${term}`;
+  if (term) return `Arrive Terminal ${term}`;
+  return null;
+}
+
+/** Stored-booking flight lead — gospel order: conf · route · times · stops · terminal. Never invent flight number. */
 export function formatTravelDayFlightLead(flight: HomeTravelDayFlight): string {
-  const provider = flight.provider?.trim() || "ITA Airways";
   const from = flight.flightDepartureAirport?.trim() || "";
   const to = flight.flightArrivalAirport?.trim() || "";
   const route = from && to ? `${from} → ${to}` : "";
   const num = flight.flightNumber?.trim();
-  const time = formatLocalTime(flight.flightDepartureTime);
   const conf = flight.confirmationCode?.trim();
-  const terminal = flight.flightArrivalTerminal?.trim();
   const bits = [
-    provider,
-    num || null,
-    route,
-    time ? `departs ${time}` : null,
     conf ? `Confirmation ${conf}` : null,
-    terminal ? `Arrive Terminal ${terminal}` : null,
+    route || null,
+    formatFlightTimeRange(flight.flightDepartureTime, flight.flightArrivalTime),
+    formatFlightConnectionStops(flight.flightConnectionStops),
+    formatArrivalTerminalLabel(to, flight.flightArrivalTerminal),
+    num || null,
   ].filter(Boolean);
   return bits.join(" · ") || route || "Your flight today";
 }
@@ -285,6 +310,7 @@ export function buildHomeTravelDayCoach(input: {
         flightDepartureTime: primaryFlight.flightDepartureTime ?? primaryFlight.localTime,
         flightArrivalTime: primaryFlight.flightArrivalTime,
         flightArrivalTerminal: primaryFlight.flightArrivalTerminal,
+        flightConnectionStops: primaryFlight.flightConnectionStops,
         confirmationCode: primaryFlight.confirmationCode,
         provider: primaryFlight.provider,
       }
@@ -315,9 +341,6 @@ export function buildHomeTravelDayCoach(input: {
   const leadParts: string[] = [];
   for (const train of trains) leadParts.push(trainHeadline(train));
   if (flight) leadParts.push(flightHeadline(flight));
-  if (flight?.confirmationCode?.trim()) {
-    leadParts.push(`Confirmation ${flight.confirmationCode.trim()}`);
-  }
   const leadDetail = leadParts.join(" · ") || "Your booked travel for today.";
 
   const leaveCue = (() => {

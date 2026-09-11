@@ -28,6 +28,24 @@ const BARI_VENICE_SEP_12 = [...BARI_VENICE_SEP_12_RESERVATIONS];
 const SEP_11_ROME_EVENING = Date.parse("2026-09-11T18:00:00Z");
 const SEP_12_MORNING = Date.parse("2026-09-12T07:00:00Z");
 
+test("G55: formatTravelDayFlightLead shows gospel Z84T4Z without invented flight number", () => {
+  const lead = formatTravelDayFlightLead({
+    id: "flight-bri-vce",
+    confirmationCode: "Z84T4Z",
+    flightDepartureAirport: "BRI",
+    flightArrivalAirport: "VCE",
+    flightDepartureTime: "2026-09-12 15:20",
+    flightArrivalTime: "2026-09-12 18:25",
+    flightArrivalTerminal: "1",
+    flightConnectionStops: 1,
+    provider: "ITA Airways",
+  });
+  assert.equal(
+    lead,
+    "Confirmation Z84T4Z · BRI → VCE · 3:20 PM–6:25 PM · 1 stop · VCE T1",
+  );
+});
+
 test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", () => {
   const coach = buildHomeTravelDayCoach({
     reservations: BARI_VENICE_SEP_12,
@@ -54,8 +72,15 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
   assert.equal(coach!.trainHandoffs[1]!.passengerTickets.length, 2);
   assert.equal(coach!.flight?.confirmationCode, "Z84T4Z");
   assert.equal(coach!.flight?.flightNumber, undefined);
-  assert.match(formatTravelDayFlightLead(coach!.flight!), /ITA Airways.*BRI → VCE.*Z84T4Z/i);
-  assert.doesNotMatch(formatTravelDayFlightLead(coach!.flight!), /AZ1464/i);
+  assert.equal(coach!.flight?.flightConnectionStops, 1);
+  const flightLead = formatTravelDayFlightLead(coach!.flight!);
+  assert.match(flightLead, /Confirmation Z84T4Z/i);
+  assert.match(flightLead, /BRI → VCE/i);
+  assert.match(flightLead, /3:20 PM–6:25 PM|15:20–18:25/i);
+  assert.match(flightLead, /1 stop/i);
+  assert.match(flightLead, /VCE T1/i);
+  assert.doesNotMatch(flightLead, /AZ1464/i);
+  assert.doesNotMatch(flightLead, /\bAZ\d{3,4}\b/i);
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[0]!.passengerName, /Stephanie/i);
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[1]!.passengerName, /Jeffery/i);
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[0]!.actionUrl, /passenger=stephanie/i);
@@ -75,12 +100,13 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
   assert.match(walkText, /single acceptance area/i);
   assert.match(walkText, /Stephanie/i);
   assert.match(walkText, /Jeffery/i);
-  assert.match(walkText, /ITA Airways/i);
   assert.match(walkText, /BRI.*VCE/i);
-  assert.match(walkText, /3:20|15:20/i);
-  assert.match(walkText, /Terminal 1/i);
+  assert.match(walkText, /3:20 PM–6:25 PM|15:20/i);
+  assert.match(walkText, /1 stop/i);
+  assert.match(walkText, /VCE T1/i);
   assert.match(walkText, /Z84T4Z/i);
   assert.doesNotMatch(walkText, /AZ1464/i);
+  assert.doesNotMatch(walkText, /\bAZ\d{3,4}\b/i);
   assert.doesNotMatch(walkText, /\bgate\s+[AB]\d{1,2}\b/i);
   assert.doesNotMatch(walkText, /ITA door/i);
 });

@@ -31,6 +31,8 @@ export interface HomeStayReservation {
   flightDepartureTime?: string;
   flightArrivalTime?: string;
   flightArrivalTerminal?: string;
+  /** Stored connection count from booking — omit from UI when unset (never invent). */
+  flightConnectionStops?: number;
 }
 
 export interface HomeNextTravelMove {

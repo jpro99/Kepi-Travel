@@ -1,6 +1,7 @@
 /**
- * CEO gospel — Sep 12, 2026 Bari→Venice travel day (J7HBM5).
- * Two passengers × two train legs + BRI→VCE flight. Do not invent beyond this.
+ * CEO gospel — Sep 12, 2026 Bari→Venice travel day (J7HBM5 + Z84T4Z).
+ * Two passengers × two train legs + ITA BRI→VCE 15:20–18:25, 1 stop, VCE T1.
+ * No verified flight number on ticket — never invent AZ1464 or any other flight number.
  */
 
 import {
@@ -131,6 +132,7 @@ export const BARI_VENICE_SEP_12_RESERVATIONS = [
     flightDepartureAirport: "BRI",
     flightArrivalAirport: "VCE",
     flightArrivalTerminal: "1",
+    flightConnectionStops: 1,
     timezone: "Europe/Rome",
   },
   {
