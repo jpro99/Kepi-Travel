@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { tryAnswerTripQuestion, type TripHelpReservation } from "@/lib/support/tripHelpAnswer";
+import { BARI_VENICE_SEP_12_RESERVATIONS } from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
 
 const NEREA_MONOPOLI_TRAIN: TripHelpReservation[] = [
   {
@@ -69,42 +70,7 @@ test("where am I uses active hotel on calendar today", () => {
   assert.match(answer!, /NEREA/i);
 });
 
-const BARI_VENICE_SEP_12: TripHelpReservation[] = [
-  {
-    id: "lecce-stay",
-    type: "hotel",
-    title: "Lecce stay",
-    localTime: "2026-09-08",
-    checkOutDate: "2026-09-12",
-    location: "Lecce, Italy",
-    hotelSearchCity: "Lecce",
-    timezone: "Europe/Rome",
-  },
-  {
-    id: "train-lecce-bari",
-    type: "train",
-    title: "Frecciargento 8312",
-    provider: "Trenitalia",
-    trainNumber: "8312",
-    localTime: "2026-09-12 09:35",
-    location: "Lecce → Bari Centrale",
-    confirmationCode: "J7HBM5",
-    timezone: "Europe/Rome",
-    hasPdfAttachment: true,
-    originalEmailText: "Trenitalia Frecciargento 8312",
-  },
-  {
-    id: "flight-bri-vce",
-    type: "flight",
-    localTime: "2026-09-12 15:20",
-    flightDate: "2026-09-12",
-    flightDepartureTime: "2026-09-12 15:20",
-    flightDepartureAirport: "BRI",
-    flightArrivalAirport: "VCE",
-    flightNumber: "AZ1464",
-    timezone: "Europe/Rome",
-  },
-];
+const BARI_VENICE_SEP_12: TripHelpReservation[] = [...BARI_VENICE_SEP_12_RESERVATIONS];
 
 test("G55: Sep 11 Help answers next travel day with Lecce→Bari train facts", () => {
   const answer = tryAnswerTripQuestion("What's my next travel day?", {
@@ -117,6 +83,7 @@ test("G55: Sep 11 Help answers next travel day with Lecce→Bari train facts", (
   assert.ok(answer);
   assert.match(answer!, /Sep 12/i);
   assert.match(answer!, /8312|Trenitalia|Lecce/i);
+  assert.match(answer!, /91312|Regionale|airport/i);
   assert.match(answer!, /BRI|VCE|flight/i);
 });
 

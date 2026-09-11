@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getResendClient } from "@/lib/email/resendClient";
+import { extractNamedPdfSection } from "@/lib/travelAssistant/emailSourceText";
 import { getTrip } from "@/lib/travelAssistant/tripStore";
 import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 
@@ -55,6 +56,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const tripId = url.searchParams.get("tripId")?.trim() ?? "";
   const reservationId = url.searchParams.get("reservationId")?.trim() ?? "";
+  const passengerSlug = url.searchParams.get("passenger")?.trim().toLowerCase() ?? "";
   if (!tripId || !reservationId) {
     return NextResponse.json({ error: "tripId and reservationId are required" }, { status: 400 });
   }
@@ -109,10 +111,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "No source email stored for this reservation" }, { status: 404 });
   }
 
+  const passengerSection = passengerSlug ? extractNamedPdfSection(storedText, passengerSlug) : null;
+  const displayText = passengerSection ?? storedText;
+
   return new NextResponse(
     renderEmailPage({
-      subject,
-      bodyHtml: `<pre>${escapeHtml(storedText)}</pre>`,
+      subject: passengerSection ? `${subject} — ${passengerSlug}` : subject,
+      bodyHtml: `<pre>${escapeHtml(displayText)}</pre>`,
       reservationTitle: reservation.title || reservation.provider,
     }),
     { headers: { "Content-Type": "text/html; charset=utf-8" } },

@@ -26,12 +26,19 @@ export interface TrainTicketOpenTarget {
   isExternal: boolean;
 }
 
+export interface TrainPassengerTicketAction {
+  passengerName: string;
+  actionLabel: string;
+  actionUrl: string;
+}
+
 export interface TrainTicketHandoffContent {
   reservationId: string;
   headline: string;
   detail: string;
   primaryActionLabel: string;
   primaryActionUrl: string;
+  passengerTickets: TrainPassengerTicketAction[];
   honestyNote: string;
 }
 
@@ -203,6 +210,33 @@ export function resolveTrainTicketOpenTarget(
   return resolveExternalTicketTarget(reservation);
 }
 
+function collectPassengerTicketActions(
+  reservation: TrainTicketSourceReservation,
+  tripId?: string | null,
+): TrainPassengerTicketAction[] {
+  const passengerLinks = (reservation.sourceLinks ?? []).filter(
+    (link) => link.kind === "ticket" && link.url?.trim() && isOpenableTicketUrl(link.url),
+  );
+  const namedPassengers = passengerLinks.filter((link) => {
+    const label = link.label.trim();
+    return label.length > 0 && !/^(train tickets|view ticket|boarding pass)/iu.test(label);
+  });
+
+  if (namedPassengers.length >= 2) {
+    return namedPassengers.map((link) => ({
+      passengerName: link.label.trim(),
+      actionLabel: link.label.trim(),
+      actionUrl: link.url.trim(),
+    }));
+  }
+
+  if (tripId && reservationHasSourceEmail(reservation) && namedPassengers.length === 0) {
+    return [];
+  }
+
+  return [];
+}
+
 export function buildTrainTicketHandoffContent(
   reservation: TrainTicketSourceReservation,
   tripId?: string | null,
@@ -210,6 +244,8 @@ export function buildTrainTicketHandoffContent(
   if (!isBookedTrainReservation(reservation)) return null;
   const target = resolveTrainTicketOpenTarget(reservation, tripId);
   if (!target) return null;
+
+  const passengerTickets = collectPassengerTicketActions(reservation, tripId);
 
   const honestyNote = target.isExternal
     ? target.url === reservation.manageUrl?.trim()
@@ -227,6 +263,7 @@ export function buildTrainTicketHandoffContent(
     detail: trainDetail(reservation),
     primaryActionLabel: target.label,
     primaryActionUrl: target.url,
+    passengerTickets,
     honestyNote,
   };
 }

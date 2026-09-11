@@ -174,7 +174,7 @@ export function buildHomeTravelDayCoach(input: {
   })();
 
   const leadParts: string[] = [];
-  if (primaryTrain) leadParts.push(trainHeadline(primaryTrain));
+  for (const train of trains) leadParts.push(trainHeadline(train));
   if (flight) leadParts.push(flightHeadline(flight));
   if (flight?.confirmationCode?.trim()) {
     leadParts.push(`Confirmation ${flight.confirmationCode.trim()}`);

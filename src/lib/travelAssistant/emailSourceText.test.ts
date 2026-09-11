@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  extractNamedPdfSection,
+  formatNamedPdfSection,
   appendPdfAttachmentText,
   ensurePdfInSourceText,
   mergePdfSectionIntoBody,
@@ -55,4 +57,16 @@ test("appendPdfAttachmentText does not duplicate marker", () => {
   const once = appendPdfAttachmentText("body", "pdf text");
   const twice = appendPdfAttachmentText(once, "pdf text");
   assert.equal(once, twice);
+});
+
+test("formatNamedPdfSection + extractNamedPdfSection isolate per-passenger PDF text", () => {
+  const stored = [
+    formatNamedPdfSection("Stephanie-Russell-1980665325.pdf", "PASSEGGERO Stephanie Russell\nFrecciargento 8312"),
+    formatNamedPdfSection("Jeffery Paul-Russell-1980665325.pdf", "PASSEGGERO Jeffery Paul Russell\nFrecciargento 8312"),
+  ].join("\n\n");
+  const stephanie = extractNamedPdfSection(stored, "stephanie");
+  const jeffery = extractNamedPdfSection(stored, "jeffery-paul");
+  assert.match(stephanie ?? "", /Stephanie Russell/u);
+  assert.match(jeffery ?? "", /Jeffery Paul Russell/u);
+  assert.doesNotMatch(stephanie ?? "", /Jeffery Paul/u);
 });

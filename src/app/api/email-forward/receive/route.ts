@@ -45,6 +45,10 @@ import { isDuplicateReservation, type DuplicateReservationFields } from "@/lib/t
 import { drainForwardReviewQueue } from "@/lib/travelAssistant/drainForwardReviewQueue";
 import { getFewShotExamplesForEmail } from "@/lib/travelAssistant/mlReadiness/fewShotExamples";
 import { EMAIL_FORWARD_PARSER_VERSION } from "@/lib/travelAssistant/mlReadiness/parserVersion";
+import {
+  buildPassengerTicketSourceLinks,
+  mergePassengerTicketLinks,
+} from "@/lib/travelAssistant/railPassengerTicketLinks";
 import { extractAttachmentTextFromReceivedEmail } from "@/lib/travelAssistant/receivedEmailAttachmentText";
 import {
   appendDocxAttachmentText,
@@ -550,6 +554,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
     }
 
     let pdfAttachmentText = "";
+    let pdfAttachments: Array<{ filename: string; text: string }> = [];
     let docxAttachmentText = "";
     let legacyDocFilenames: string[] = [];
     if (emailId) {
@@ -559,6 +564,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
           requestId,
         });
         pdfAttachmentText = attachmentText.pdfText;
+        pdfAttachments = attachmentText.pdfAttachments;
         docxAttachmentText = attachmentText.docxText;
         legacyDocFilenames = attachmentText.legacyDocFilenames;
         if (pdfAttachmentText.trim()) {
@@ -849,8 +855,24 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         arrivalAirport: parserType === "flight" ? parserArrivalAirport || undefined : undefined,
       });
 
+      const reservationId = `res-email-${generateId()}`;
+      const parserTrainNumber =
+        typeof parserDraftRecord.trainNumber === "string" ? parserDraftRecord.trainNumber.trim() : "";
+      const passengerTicketLinks =
+        parserType === "train" && pdfAttachments.length > 0
+          ? buildPassengerTicketSourceLinks({
+              pdfAttachments,
+              tripId: targetTrip.id,
+              reservationId,
+            })
+          : [];
+      const mergedSourceLinks = mergePassengerTicketLinks(
+        emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
+        passengerTicketLinks,
+      );
+
       const parsedReservation = {
-        id: `res-email-${generateId()}`,
+        id: reservationId,
         type: parserType,
         title: parserTitle,
         provider: parserProvider,
@@ -869,6 +891,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         quotedPointsMiles: emailPricing.milesSpent,
         quotedMilesEarned: emailPricing.milesEarned,
         pointsProgram: emailPricing.program,
+        trainNumber: parserType === "train" ? parserTrainNumber : undefined,
         flightNumber: parserType === "flight" ? parserFlightNumber : "",
         flightAirline: resolvedAirline,
         flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
@@ -892,6 +915,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
               })
             : undefined,
         ...emailSourceMetadata,
+        sourceLinks: mergedSourceLinks.length > 0 ? mergedSourceLinks : emailSourceMetadata.sourceLinks,
       };
 
       if (

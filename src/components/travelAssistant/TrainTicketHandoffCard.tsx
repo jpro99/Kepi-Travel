@@ -17,7 +17,26 @@ export function TrainTicketHandoffCard({ content, eyebrow = "Train tickets" }: T
       <h3 className="mt-1 text-[17px] font-semibold text-[#1D1D1F]">{content.headline}</h3>
       <p className="mt-1 text-[14px] leading-relaxed text-[#6E6E73]">{content.detail}</p>
       <p className="mt-2 text-[12px] text-[#6E6E73]">{content.honestyNote}</p>
-      {primaryUrl ? (
+      {content.passengerTickets.length >= 2 ? (
+        <div className="mt-3 grid gap-2">
+          {content.passengerTickets.map((ticket) => {
+            const url = isOpenableTicketUrl(ticket.actionUrl) ? ticket.actionUrl : null;
+            if (!url) return null;
+            const ticketExternal = url.startsWith("http");
+            return (
+              <a
+                key={`${ticket.passengerName}-${url}`}
+                href={url}
+                target={ticketExternal ? "_blank" : undefined}
+                rel={ticketExternal ? "noopener noreferrer" : undefined}
+                className="flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#007AFF] px-4 text-[17px] font-semibold text-white hover:opacity-90"
+              >
+                {ticket.passengerName}
+              </a>
+            );
+          })}
+        </div>
+      ) : primaryUrl ? (
         <a
           href={primaryUrl}
           target={external ? "_blank" : undefined}
