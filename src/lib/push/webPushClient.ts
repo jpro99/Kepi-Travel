@@ -52,6 +52,54 @@ export function readNotificationPermissionState(): NotificationPermissionState {
   return "unsupported";
 }
 
+/** Current site hostname for honest Android Chrome site-settings copy (preview vs production). */
+export function readNotificationSiteHostname(): string {
+  if (typeof window === "undefined") return "this site";
+  return window.location.hostname?.trim() || "this site";
+}
+
+/**
+ * Android: Kepi in a Chrome tab is NOT listed as "Kepi Travel" under Settings → Notifications.
+ * Permission lives under Chrome → Site settings → Notifications for this hostname,
+ * unless the PWA is installed (own channel). Never fakes granted.
+ */
+export function buildAndroidNotificationSettingsGuide(input?: {
+  blocked?: boolean;
+  includeNeverPromptedNote?: boolean;
+}): string {
+  const host = readNotificationSiteHostname();
+  const blocked = input?.blocked === true;
+  const includeNeverPromptedNote = input?.includeNeverPromptedNote !== false;
+
+  if (isStandalonePwa()) {
+    const prefix = blocked
+      ? "Notifications are blocked for the installed Kepi app."
+      : "To enable flight alerts on the installed Kepi app:";
+    return (
+      `${prefix} Long-press the Kepi icon → App info → Notifications → Allow. ` +
+      "If still blocked, also check Chrome → ⋮ → Settings → Site settings → Notifications → " +
+      `${host} → Allow, then return here and tap Enable again.`
+    );
+  }
+
+  const blockedPrefix = blocked
+    ? "Notifications are blocked for this site in Chrome."
+    : "To enable flight alerts in Chrome:";
+  const neverPrompted =
+    includeNeverPromptedNote && !blocked
+      ? "Tap Enable here first — Chrome must show the permission prompt before this site appears under Notifications. "
+      : "";
+  const notListed =
+    "Kepi does not appear as its own app (\"Kepi Travel\") in Android Settings → Notifications while you use it in a Chrome tab — only Chrome controls this site. ";
+
+  return (
+    `${neverPrompted}${blockedPrefix} ${notListed}` +
+    `Open Chrome → ⋮ → Settings → Site settings → Notifications → find ${host} → Allow. ` +
+    "Or install Kepi to your Home Screen (Add to Home screen) so it can get its own notification channel. " +
+    "Then return here and tap Enable again."
+  );
+}
+
 /** Honest copy when the user previously blocked notifications — Chrome cannot re-prompt. */
 export function buildBlockedNotificationHelp(): string {
   if (isIosSafari()) {
@@ -61,21 +109,20 @@ export function buildBlockedNotificationHelp(): string {
     );
   }
   if (isAndroid()) {
-    if (isStandalonePwa()) {
-      return (
-        "Notifications are blocked for Kepi. In Chrome: tap ⋮ → Settings → Site settings → Notifications → " +
-        "find kepitravel.com → Allow. Or long-press the Kepi app icon → App info → Notifications → Allow."
-      );
-    }
-    return (
-      "Notifications are blocked for Kepi. In Chrome: tap ⋮ → Settings → Site settings → Notifications → " +
-      "find kepitravel.com → Allow, then return here and tap Enable again."
-    );
+    return buildAndroidNotificationSettingsGuide({ blocked: true, includeNeverPromptedNote: false });
   }
+  const host = readNotificationSiteHostname();
   return (
-    "Notifications are blocked for Kepi. Open your browser site settings, allow notifications for kepitravel.com, " +
+    `Notifications are blocked for Kepi. Open your browser site settings, allow notifications for ${host}, ` +
     "then return here and tap Enable again."
   );
+}
+
+function buildPermissionNotGrantedHelp(): string {
+  if (isAndroid()) {
+    return buildAndroidNotificationSettingsGuide({ blocked: false });
+  }
+  return "Notification permission was not granted. Tap Enable again when you are ready.";
 }
 
 async function fetchVapidPublicKey(): Promise<
@@ -167,7 +214,7 @@ export async function subscribeToWebPushNotifications(): Promise<WebPushSubscrib
     }
     return {
       ok: false,
-      message: "Notification permission was not granted. Tap Enable again when you are ready.",
+      message: buildPermissionNotGrantedHelp(),
     };
   }
 
@@ -215,6 +262,9 @@ export async function subscribeToWebPushNotifications(): Promise<WebPushSubscrib
     const message = error instanceof Error ? error.message : "Could not subscribe to push.";
     if (/not supported|denied|permission|blocked/iu.test(message)) {
       if (readNotificationPermissionState() === "denied") {
+        return { ok: false, blocked: true, message: buildBlockedNotificationHelp() };
+      }
+      if (isAndroid()) {
         return { ok: false, blocked: true, message: buildBlockedNotificationHelp() };
       }
       return { ok: false, message: "This browser blocked push alerts. Check notification settings." };
