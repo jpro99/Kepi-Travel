@@ -71,7 +71,7 @@ const BARI_VENICE_SEP_12 = [
 const SEP_11_ROME_EVENING = Date.parse("2026-09-11T18:00:00Z");
 const SEP_12_MORNING = Date.parse("2026-09-12T07:00:00Z");
 
-test("G52: Sep 12 travel day coach surfaces train then BRI flight with honest transfer", () => {
+test("G55: Sep 12 travel day coach surfaces train then BRI flight with honest transfer", () => {
   const coach = buildHomeTravelDayCoach({
     reservations: [...BARI_VENICE_SEP_12],
     dateKey: "2026-09-12",
@@ -94,7 +94,7 @@ test("G52: Sep 12 travel day coach surfaces train then BRI flight with honest tr
   assert.match(coach!.leaveCue ?? "", /Train departs 9:35/i);
 });
 
-test("G52: Sep 11 evening previews tomorrow travel day (not generic mid-stay only)", () => {
+test("G55: Sep 11 evening previews tomorrow travel day (not generic mid-stay only)", () => {
   const tomorrow = resolveTomorrowTravelDayCoach({
     reservations: [...BARI_VENICE_SEP_12],
     nowMs: SEP_11_ROME_EVENING,
@@ -117,7 +117,7 @@ test("G52: Sep 11 evening previews tomorrow travel day (not generic mid-stay onl
   assert.match(midStay!.nextTravelMove!.headline, /Lecce.*Bari/i);
 });
 
-test("G52: travel day ticket-first next action opens stored PDF", () => {
+test("G55: travel day ticket-first next action opens stored PDF", () => {
   const coach = resolveTodayTravelDayCoach({
     reservations: [...BARI_VENICE_SEP_12],
     nowMs: SEP_12_MORNING,
@@ -131,7 +131,7 @@ test("G52: travel day ticket-first next action opens stored PDF", () => {
   assert.match(next.prepHref!, /source-view/u);
 });
 
-test("G52: mid-stay vs travel-day — Sep 6 Monopoli is not travel day", () => {
+test("G55: mid-stay vs travel-day — Sep 6 Monopoli is not travel day", () => {
   const reservations = BARI_VENICE_SEP_12.filter((row) => row.id !== "train-lecce-bari" && row.id !== "flight-bri-vce");
   assert.equal(dayHasBookedTravelMoves(reservations, "2026-09-12"), false);
   assert.equal(
@@ -140,7 +140,7 @@ test("G52: mid-stay vs travel-day — Sep 6 Monopoli is not travel day", () => {
   );
 });
 
-test("G52: mission phase is departure_day on Sep 12 BRI→VCE with Europe/Rome today", () => {
+test("G55: mission phase is departure_day on Sep 12 BRI→VCE with Europe/Rome today", () => {
   const phase = detectMissionPhase(
     {
       reservations: [...BARI_VENICE_SEP_12],
@@ -153,7 +153,7 @@ test("G52: mission phase is departure_day on Sep 12 BRI→VCE with Europe/Rome t
   assert.equal(phase, "departure_day");
 });
 
-test("G52: train + BRI flight covers Lecce→Venice connector hop", () => {
+test("G55: train + BRI flight covers Lecce→Venice connector hop", () => {
   const legs = buildPlannedFlightLegs(
     null,
     [],
@@ -203,7 +203,7 @@ test("buildBriAirportTransferHint stays honest — no invented gate", () => {
   assert.doesNotMatch(hint!, /Gate [A-Z0-9]/i);
 });
 
-test("G52: mid-stay next action still uses next travel day coach on Sep 11", () => {
+test("G55: mid-stay next action still uses next travel day coach on Sep 11", () => {
   const coach = buildHomeTodayCoach({
     reservations: [...BARI_VENICE_SEP_12],
     nowMs: SEP_11_ROME_EVENING,

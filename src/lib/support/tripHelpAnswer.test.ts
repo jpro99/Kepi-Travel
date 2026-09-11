@@ -106,7 +106,7 @@ const BARI_VENICE_SEP_12: TripHelpReservation[] = [
   },
 ];
 
-test("G52: Sep 11 Help answers next travel day with Lecce→Bari train facts", () => {
+test("G55: Sep 11 Help answers next travel day with Lecce→Bari train facts", () => {
   const answer = tryAnswerTripQuestion("What's my next travel day?", {
     tripName: "Europe 2026",
     destination: "Italy",

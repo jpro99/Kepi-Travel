@@ -1,5 +1,5 @@
 /**
- * Home travel-day coach — train + flight same calendar day (G52).
+ * Home travel-day coach — train + flight same calendar day (G55).
  * Surfaces stored ticket artifacts first; honest BRI transfer cue without invented gates.
  */
 
