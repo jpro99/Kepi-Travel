@@ -21,6 +21,11 @@ import {
   travelerTodayKey,
 } from "@/lib/travelAssistant/homeTodayCoach";
 import {
+  buildFlightTicketHandoffContent,
+  type FlightTicketHandoffContent,
+  type FlightTicketSourceReservation,
+} from "@/lib/travelAssistant/flightTicketHandoff";
+import {
   buildTrainTicketHandoffContent,
   isBookedTrainReservation,
   type TrainTicketHandoffContent,
@@ -53,6 +58,8 @@ export interface HomeTravelDayCoach {
   headline: string;
   leadDetail: string;
   trainHandoffs: TrainTicketHandoffContent[];
+  /** Stored boarding-pass / ticket artifacts for today's primary flight — null when none on file. */
+  flightHandoff: FlightTicketHandoffContent | null;
   flight: HomeTravelDayFlight | null;
   leaveCue: string | null;
   airportTransferHint: string | null;
@@ -379,6 +386,12 @@ export function buildHomeTravelDayCoach(input: {
   const flight: HomeTravelDayFlight | null = flightPick
     ? composeTravelDayFlightView(flightPick)
     : null;
+  const flightHandoff: FlightTicketHandoffContent | null = flightPick
+    ? buildFlightTicketHandoffContent(
+        flightPick.primary as FlightTicketSourceReservation,
+        input.tripId,
+      )
+    : null;
 
   const hasTrainBeforeFlight = Boolean(primaryTrain && flight);
   const airportTransferHint = buildBriAirportTransferHint({
@@ -419,6 +432,7 @@ export function buildHomeTravelDayCoach(input: {
     headline,
     leadDetail,
     trainHandoffs,
+    flightHandoff,
     flight,
     leaveCue,
     airportTransferHint,
@@ -536,6 +550,9 @@ export function buildHomeFirstPaintLead(input: {
     coach.leadDetail,
     ...coach.briAirportCoachSteps.map((step) => step.detail),
     ...coach.trainHandoffs.map((handoff) => `${handoff.headline} ${handoff.detail}`),
+    coach.flightHandoff
+      ? `${coach.flightHandoff.headline} ${coach.flightHandoff.detail} ${coach.flightHandoff.honestyNote}`
+      : "",
     ...coach.walkthroughSteps.map((step) => `${step.title} ${step.detail}`),
     nextFlightText ?? "",
   ].join(" ");
@@ -611,6 +628,17 @@ export function homeTravelDayCoachNextAction(
       ctaLabel: "Train tickets",
       prepHref: ticketUrl,
       reservationId: coach.trainHandoffs[0]?.reservationId,
+    };
+  }
+  if (coach.flightHandoff?.primaryActionUrl) {
+    return {
+      kind: "prep",
+      eyebrow: `Travel day · ${coach.dayLabel}`,
+      title: coach.headline,
+      detail: coach.leadDetail,
+      ctaLabel: coach.flightHandoff.primaryActionLabel,
+      prepHref: coach.flightHandoff.primaryActionUrl,
+      reservationId: coach.flightHandoff.reservationId,
     };
   }
   if (coach.flight?.id) {

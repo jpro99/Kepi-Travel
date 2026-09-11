@@ -211,7 +211,8 @@ export function resolveTrainTicketOpenTarget(
   return resolveExternalTicketTarget(reservation);
 }
 
-function collectPassengerTicketActions(
+/** Named per-passenger ticket links (train + flight). */
+export function collectPassengerTicketActions(
   reservation: TrainTicketSourceReservation,
   tripId?: string | null,
 ): TrainPassengerTicketAction[] {

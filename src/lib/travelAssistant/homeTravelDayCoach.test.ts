@@ -17,6 +17,10 @@ import { buildHomeTodayCoach, homeTodayCoachNextAction } from "@/lib/travelAssis
 import { coverHopWithBookedFacts } from "@/lib/travelAssistant/bookedHopCoverage";
 import { buildPlannedFlightLegs } from "@/lib/travelAssistant/tripPlanBooking";
 import {
+  buildPassengerTicketSourceLinks,
+} from "@/lib/travelAssistant/railPassengerTicketLinks";
+import {
+  BARI_VENICE_PDF_ATTACHMENTS,
   BARI_VENICE_SEP_12_RESERVATIONS,
   BARI_VENICE_TRIP_ID,
   JEFFERY_PDF_FILENAME,
@@ -331,6 +335,51 @@ test("G55: hasActiveTravelDayCoach true on Sep 12 even when next remaining fligh
   );
   assert.equal(snap.phase, "departure_day");
   assert.equal(snap.nextFlight?.id, "flight-bri-vce");
+});
+
+test("G55: gospel Z84T4Z flight has no boarding-pass handoff without stored artifacts", () => {
+  const coach = buildHomeTravelDayCoach({
+    reservations: BARI_VENICE_SEP_12,
+    dateKey: "2026-09-12",
+    timezone: "Europe/Rome",
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.ok(coach);
+  assert.equal(coach!.flightHandoff, null);
+  assert.equal(coach!.flight?.confirmationCode, "Z84T4Z");
+});
+
+test("G55: travel-day coach surfaces both-pax flight boarding passes when artifacts stored", () => {
+  const flightPassengerLinks = buildPassengerTicketSourceLinks({
+    pdfAttachments: BARI_VENICE_PDF_ATTACHMENTS,
+    tripId: BARI_VENICE_TRIP_ID,
+    reservationId: "flight-bri-vce",
+  });
+  const reservations = BARI_VENICE_SEP_12.map((row) =>
+    row.id === "flight-bri-vce"
+      ? {
+          ...row,
+          hasPdfAttachment: true,
+          originalEmailText: "ITA Airways Z84T4Z boarding passes",
+          sourceLinks: flightPassengerLinks,
+        }
+      : row,
+  );
+  const coach = buildHomeTravelDayCoach({
+    reservations,
+    dateKey: "2026-09-12",
+    timezone: "Europe/Rome",
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.ok(coach?.flightHandoff);
+  assert.equal(coach!.flightHandoff!.passengerTickets.length, 2);
+  assert.match(coach!.flightHandoff!.passengerTickets[0]!.passengerName, /Stephanie/i);
+  assert.match(coach!.flightHandoff!.passengerTickets[1]!.passengerName, /Jeffery/i);
+  assert.match(coach!.flightHandoff!.headline, /Z84T4Z/i);
+  assert.doesNotMatch(coach!.flightHandoff!.headline, /AZ1464/i);
+  const next = homeTravelDayCoachNextAction(coach!);
+  assert.equal(next.ctaLabel, "Train tickets");
+  assert.match(next.prepHref ?? "", /source-view/u);
 });
 
 test("G55: mid-stay next action still uses next travel day coach on Sep 11", () => {

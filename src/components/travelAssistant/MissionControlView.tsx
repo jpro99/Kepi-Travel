@@ -1053,6 +1053,12 @@ export function MissionControlView({
                 </p>
               </div>
             ) : null}
+            {travelDayCoach.flightHandoff ? (
+              <TrainTicketHandoffCard
+                content={travelDayCoach.flightHandoff}
+                eyebrow="Boarding passes"
+              />
+            ) : null}
             {travelDayCoach.flight ? (
               <button
                 type="button"
@@ -1065,6 +1071,11 @@ export function MissionControlView({
                 <p className="mt-1 text-[16px] font-semibold leading-snug text-[#1D1D1F]">
                   {formatTravelDayFlightLead(travelDayCoach.flight)}
                 </p>
+                {!travelDayCoach.flightHandoff ? (
+                  <p className="mt-2 text-[13px] leading-relaxed text-[#6E6E73]">
+                    Forward boarding passes to show them here.
+                  </p>
+                ) : null}
               </button>
             ) : null}
           </div>

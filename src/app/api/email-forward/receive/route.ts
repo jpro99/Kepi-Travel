@@ -69,6 +69,7 @@ import {
   finalizeTripReservationPricing,
 } from "@/lib/travelAssistant/hydrateReservationQuotedPrice";
 import {
+  buildSourceEmailViewPath,
   extractReservationSourceLinks,
   resolveBoardingPassUrl,
 } from "@/lib/travelAssistant/reservationLinks";
@@ -858,8 +859,10 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       const reservationId = `res-email-${generateId()}`;
       const parserTrainNumber =
         typeof parserDraftRecord.trainNumber === "string" ? parserDraftRecord.trainNumber.trim() : "";
+      // Named passenger PDFs (e.g. Stephanie-Russell-1980665325.pdf) → per-pax kind=ticket
+      // sourceLinks for train and flight; HTML boarding-pass links use resolveBoardingPassUrl.
       const passengerTicketLinks =
-        parserType === "train" && pdfAttachments.length > 0
+        (parserType === "train" || parserType === "flight") && pdfAttachments.length > 0
           ? buildPassengerTicketSourceLinks({
               pdfAttachments,
               tripId: targetTrip.id,
@@ -870,6 +873,17 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         emailSourceLinks.length > 0 ? emailSourceLinks : undefined,
         passengerTicketLinks,
       );
+      const flightBoardingPassUrl =
+        parserType === "flight"
+          ? resolveBoardingPassUrl({
+              sourceLinks: mergedSourceLinks.length > 0 ? mergedSourceLinks : emailSourceLinks,
+              originalEmailText: storedSourceText || parserOriginalEmailText,
+              html: parserHtml,
+            }) ??
+            (pdfAttachments.length > 0
+              ? buildSourceEmailViewPath(targetTrip.id, reservationId)
+              : undefined)
+          : undefined;
 
       const parsedReservation = {
         id: reservationId,
@@ -906,14 +920,7 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         checkOutDate: parserType === "hotel"
           ? (typeof parserDraftRecord.checkOutDate === "string" ? parserDraftRecord.checkOutDate.trim().slice(0, 10) : "")
           : "",
-        boardingPassUrl:
-          parserType === "flight"
-            ? resolveBoardingPassUrl({
-                sourceLinks: emailSourceLinks,
-                originalEmailText: storedSourceText || parserOriginalEmailText,
-                html: parserHtml,
-              })
-            : undefined,
+        boardingPassUrl: flightBoardingPassUrl,
         ...emailSourceMetadata,
         sourceLinks: mergedSourceLinks.length > 0 ? mergedSourceLinks : emailSourceMetadata.sourceLinks,
       };
