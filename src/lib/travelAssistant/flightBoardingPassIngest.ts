@@ -16,16 +16,21 @@ import {
   buildSourceEmailViewPath,
   type ReservationSourceLink,
 } from "@/lib/travelAssistant/reservationLinks";
+import { normalizeItaPassengerDisplayName } from "@/lib/travelAssistant/flightBoardingPassFacts";
 import { isBookedFlightReservation } from "@/lib/travelAssistant/travelDayFlightView";
 import type { HomeStayReservation } from "@/lib/travelAssistant/homeTodayCoach";
 
 const IATA_PAIR_RE =
   /\b([A-Z]{3})\s*(?:→|->|—|–|-|to)\s*([A-Z]{3})\b/giu;
 
-const PNR_RE = /\b(?:reservation(?:\s+code)?|record\s+locator|pnr|booking\s+reference)\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu;
+const PNR_RE =
+  /\b(?:reservation(?:\s+code)?|record\s+locator|pnr|booking(?:\s+code)?|booking\s+reference)\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu;
 
 const PASSENGER_BODY_RE =
-  /\b(?:passenger|passeggero|traveler|name)\s*[:]\s*([A-Z][A-Za-z]+(?:\s+[A-Za-z]+){1,3})/iu;
+  /\b(?:passenger|passeggero|traveler|name)\s*[:]\s*([^\n]+)/iu;
+
+const ITA_LAST_FIRST_RE =
+  /\b([A-Z][A-Z\s-]+),\s*([A-Z][A-Za-z\s-]+)(?:\s+(?:MRS|MR|MS|MISS)\.?)?\b/iu;
 
 export interface BoardingPassRoute {
   dep: string;
@@ -92,7 +97,16 @@ export function extractPassengerNameFromBoardingPass(input: {
   const blob = `${input.subject}\n${input.text ?? ""}\n${input.pdfText ?? ""}`;
   const bodyMatch = PASSENGER_BODY_RE.exec(blob);
   if (bodyMatch?.[1]) {
-    return bodyMatch[1].replace(/\s+/gu, " ").trim();
+    const raw = bodyMatch[1].replace(/\s+/gu, " ").trim();
+    if (ITA_LAST_FIRST_RE.test(raw)) {
+      return normalizeItaPassengerDisplayName(raw);
+    }
+    if (raw.length >= 3 && raw.length <= 48) return raw;
+  }
+
+  const itaMatch = ITA_LAST_FIRST_RE.exec(blob);
+  if (itaMatch?.[0]) {
+    return normalizeItaPassengerDisplayName(itaMatch[0]);
   }
 
   const forMatch = /\bboarding\s+pass\b[^.\n]{0,80}\bfor\s+([A-Z][A-Za-z]+(?:\s+[A-Za-z]+){1,3})/iu.exec(blob);

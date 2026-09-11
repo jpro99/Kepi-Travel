@@ -1,17 +1,28 @@
 /**
  * Travel-day flight boarding-pass handoff — per leg, per passenger.
- * Mirrors trainTicketHandoff; never invents gates, seats, or barcodes.
+ * Any IATA / any airline; mirrors trainTicketHandoff; never invents gates or seats.
  */
 
+import {
+  factsForStoredLeg,
+  formatBoardingPassLegDetail,
+  sectionTextForPassengerLeg,
+} from "@/lib/travelAssistant/flightBoardingPassFacts";
+import {
+  legSlugFromRoute,
+  type BoardingPassRoute,
+} from "@/lib/travelAssistant/flightBoardingPassIngest";
+import { reservationHasStoredBoardingPassArtifacts } from "@/lib/travelAssistant/flightBoardingPassStored";
 import { isOpenableTicketUrl } from "@/lib/travelAssistant/trainTicketHandoff";
 import { isBookedFlightReservation } from "@/lib/travelAssistant/travelDayFlightView";
 import type { HomeStayReservation } from "@/lib/travelAssistant/homeTodayCoach";
-import { legSlugFromRoute } from "@/lib/travelAssistant/flightBoardingPassIngest";
 import type { TrainPassengerTicketAction } from "@/lib/travelAssistant/trainTicketHandoff";
+import { passengerSlugFromName } from "@/lib/travelAssistant/railPassengerTicketLinks";
 
 export interface FlightBoardingPassHandoffContent {
   reservationId: string;
   legLabel: string;
+  legSlug: string;
   headline: string;
   detail: string;
   passengerTickets: TrainPassengerTicketAction[];
@@ -22,6 +33,7 @@ export interface FlightBoardingPassSourceReservation extends HomeStayReservation
   sourceLinks?: Array<{ label: string; url: string; kind: string }>;
   originalEmailText?: string;
   hasPdfAttachment?: boolean;
+  boardingPassUrl?: string;
 }
 
 function flightDateKey(reservation: FlightBoardingPassSourceReservation): string | null {
@@ -53,12 +65,40 @@ function parseLegFromUrl(url: string): string | null {
   }
 }
 
+function parsePassengerFromUrl(url: string): string | null {
+  try {
+    const passenger = new URL(url, "https://kepitravel.com").searchParams.get("passenger")?.trim();
+    return passenger || null;
+  } catch {
+    return null;
+  }
+}
+
 function legLabelFromSlug(slug: string): string {
   const [dep, arr] = slug.split("-");
   if (dep?.length === 3 && arr?.length === 3) {
     return `${dep.toUpperCase()} → ${arr.toUpperCase()}`;
   }
   return slug;
+}
+
+function routeFromLegSlug(legSlug: string): BoardingPassRoute | null {
+  const [dep, arr] = legSlug.split("-");
+  if (dep?.length === 3 && arr?.length === 3) {
+    return { dep: dep.toUpperCase(), arr: arr.toUpperCase() };
+  }
+  return null;
+}
+
+/** Only legs with stored per-passenger ticket links — partial ingest OK. */
+function discoverStoredLegSlugs(reservation: FlightBoardingPassSourceReservation): string[] {
+  const slugs = new Set<string>();
+  for (const link of reservation.sourceLinks ?? []) {
+    if (link.kind !== "ticket") continue;
+    const leg = parseLegFromUrl(link.url ?? "");
+    if (leg) slugs.add(leg);
+  }
+  return [...slugs];
 }
 
 function collectPassengerTicketsForLeg(
@@ -69,7 +109,7 @@ function collectPassengerTicketsForLeg(
   for (const link of reservation.sourceLinks ?? []) {
     if (link.kind !== "ticket" || !link.url?.trim() || !isOpenableTicketUrl(link.url)) continue;
     const linkLeg = parseLegFromUrl(link.url);
-    if (linkLeg && linkLeg !== legSlug) continue;
+    if (!linkLeg || linkLeg !== legSlug) continue;
     const label = link.label.trim();
     if (!label || /^(train tickets|view ticket|boarding pass)/iu.test(label)) continue;
     tickets.push({
@@ -81,21 +121,6 @@ function collectPassengerTicketsForLeg(
   return tickets;
 }
 
-function discoverLegSlugs(reservation: FlightBoardingPassSourceReservation): string[] {
-  const slugs = new Set<string>();
-  for (const link of reservation.sourceLinks ?? []) {
-    if (link.kind !== "ticket") continue;
-    const leg = parseLegFromUrl(link.url ?? "");
-    if (leg) slugs.add(leg);
-  }
-  const dep = (reservation.flightDepartureAirport ?? "").trim().toUpperCase();
-  const arr = (reservation.flightArrivalAirport ?? "").trim().toUpperCase();
-  if (dep.length === 3 && arr.length === 3) {
-    slugs.add(legSlugFromRoute({ dep, arr }));
-  }
-  return [...slugs];
-}
-
 export function buildFlightBoardingPassHandoffForLeg(
   reservation: FlightBoardingPassSourceReservation,
   legSlug: string,
@@ -104,16 +129,21 @@ export function buildFlightBoardingPassHandoffForLeg(
   if (passengerTickets.length === 0) return null;
 
   const legLabel = legLabelFromSlug(legSlug);
-  const conf = reservation.confirmationCode?.trim();
-  const detailParts = [conf ? `Confirmation ${conf}` : null, "Stored boarding pass in Kepi"].filter(Boolean);
+  const route = routeFromLegSlug(legSlug);
+  const facts = route
+    ? factsForStoredLeg(reservation.originalEmailText, route)
+    : {};
+  const detail = formatBoardingPassLegDetail(facts, reservation.confirmationCode);
 
   return {
     reservationId: reservation.id,
     legLabel,
+    legSlug,
     headline: `Boarding passes · ${legLabel}`,
-    detail: detailParts.join(" · "),
+    detail,
     passengerTickets,
-    honestyNote: "Opens your stored boarding-pass PDF or forwarded email — we do not generate barcodes.",
+    honestyNote:
+      "Opens your stored boarding-pass PDF or forwarded email — we do not generate barcodes.",
   };
 }
 
@@ -121,12 +151,14 @@ export function resolveFlightBoardingPassesForDay(
   reservations: FlightBoardingPassSourceReservation[],
   dateKey: string,
 ): FlightBoardingPassHandoffContent[] {
-  const flights = flightsOnTravelDay(reservations, dateKey);
+  const flights = flightsOnTravelDay(reservations, dateKey).filter(
+    reservationHasStoredBoardingPassArtifacts,
+  );
   const handoffs: FlightBoardingPassHandoffContent[] = [];
   const seen = new Set<string>();
 
   for (const flight of flights) {
-    for (const legSlug of discoverLegSlugs(flight)) {
+    for (const legSlug of discoverStoredLegSlugs(flight)) {
       const key = `${flight.id}|${legSlug}`;
       if (seen.has(key)) continue;
       const handoff = buildFlightBoardingPassHandoffForLeg(flight, legSlug);
@@ -138,3 +170,31 @@ export function resolveFlightBoardingPassesForDay(
 
   return handoffs.sort((a, b) => a.legLabel.localeCompare(b.legLabel));
 }
+
+export function hasStoredFlightBoardingPassesOnDay(
+  reservations: FlightBoardingPassSourceReservation[],
+  dateKey: string,
+): boolean {
+  return resolveFlightBoardingPassesForDay(reservations, dateKey).length > 0;
+}
+
+export function flightHasStoredBoardingPassArtifacts(
+  reservation: FlightBoardingPassSourceReservation,
+): boolean {
+  return reservationHasStoredBoardingPassArtifacts(reservation);
+}
+
+export function passengerBoardingPassActionUrl(
+  reservation: FlightBoardingPassSourceReservation,
+  passengerName: string,
+  legSlug: string,
+): string | null {
+  const slug = passengerSlugFromName(passengerName);
+  const fromLink = (reservation.sourceLinks ?? []).find((link) => {
+    if (link.kind !== "ticket" || !link.url?.trim()) return false;
+    return parseLegFromUrl(link.url) === legSlug && parsePassengerFromUrl(link.url) === slug;
+  });
+  return fromLink?.url?.trim() ?? null;
+}
+
+export { sectionTextForPassengerLeg };

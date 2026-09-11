@@ -28,6 +28,7 @@ import {
 } from "@/lib/travelAssistant/trainTicketHandoff";
 import { trainReservationsOnDayExpanded } from "@/lib/travelAssistant/travelDayTrainExpand";
 import {
+  hasStoredFlightBoardingPassesOnDay,
   resolveFlightBoardingPassesForDay,
   type FlightBoardingPassHandoffContent,
 } from "@/lib/travelAssistant/flightBoardingPassHandoff";
@@ -464,6 +465,27 @@ export function isTrainFlightTravelDayPattern(
   return flightsOnDay(reservations, dateKey).length > 0;
 }
 
+/**
+ * G57 — Day-of air travel Home for any IATA/airline when stored boarding passes exist.
+ * Partial leg ingest OK (e.g. FCO→VCE only until BRI→FCO is forwarded).
+ */
+export function isAirTravelDayWithStoredPasses(
+  reservations: HomeStayReservation[],
+  dateKey: string,
+): boolean {
+  if (flightsOnDay(reservations, dateKey).length === 0) return false;
+  return hasStoredFlightBoardingPassesOnDay(reservations, dateKey);
+}
+
+/** Train+flight travel day OR flight-only day with stored boarding-pass artifacts. */
+export function shouldActivateTravelDayCoach(
+  reservations: HomeStayReservation[],
+  dateKey: string,
+): boolean {
+  if (isTrainFlightTravelDayPattern(reservations, dateKey)) return true;
+  return isAirTravelDayWithStoredPasses(reservations, dateKey);
+}
+
 export interface ActiveTravelDayCoachResult {
   coach: HomeTravelDayCoach;
   mode: "today" | "tomorrow";
@@ -482,7 +504,7 @@ export function resolveActiveTravelDayCoach(input: {
   const timezone = resolveEffectiveTravelTimezone(input.reservations, input.timezone);
   const todayKey = travelerTodayKey(nowMs, timezone);
 
-  if (isTrainFlightTravelDayPattern(input.reservations, todayKey)) {
+  if (shouldActivateTravelDayCoach(input.reservations, todayKey)) {
     const coach = buildHomeTravelDayCoach({
       reservations: input.reservations,
       dateKey: todayKey,
@@ -494,7 +516,7 @@ export function resolveActiveTravelDayCoach(input: {
   }
 
   const tomorrowKey = addIsoDays(todayKey, 1);
-  if (isTrainFlightTravelDayPattern(input.reservations, tomorrowKey)) {
+  if (shouldActivateTravelDayCoach(input.reservations, tomorrowKey)) {
     const coach = buildHomeTravelDayCoach({
       reservations: input.reservations,
       dateKey: tomorrowKey,

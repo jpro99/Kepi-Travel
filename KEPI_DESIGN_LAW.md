@@ -250,6 +250,9 @@ On a calendar travel day with booked train + flight (e.g. Lecce→Bari Centrale 
 **G56 — ITA boarding passes: per passenger, per leg, stored not invented**  
 Forwarded airline boarding-pass emails/PDFs ingest via the trips forward path (same named-PDF artifact model as Trenitalia). Store one artifact per passenger per segment (e.g. BRI→FCO and FCO→VCE for Stephanie + Jeffery under Z84T4Z). Travel-day Home surfaces boarding-pass CTAs per leg with both-passenger buttons — mirror train ticket handoff. Never invent gate, seat, or flight numbers not in the stored email/PDF.
 
+**G57 — Day-of air travel Home: stored passes first, any IATA / any airline**  
+On flight departure day, when Kepi holds stored boarding-pass/ticket artifacts (named PDF or source-view per passenger per leg), Home leads with those CTAs — never send the traveler to the airline check-in site. Partial leg ingest is OK (show only legs that landed). Passenger switch buttons for every stored traveler. Flight numbers, gates, seats, and times on Home come only from stored email/PDF text — missing stays missing.
+
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`
 
@@ -1120,6 +1123,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G54 | `src/lib/travelAssistant/ec261Coach.test.ts` |
 | G55 | `src/lib/travelAssistant/homeTravelDayCoach.test.ts`, `src/lib/support/tripHelpAnswer.test.ts` |
 | G56 | `src/lib/travelAssistant/flightBoardingPassIngest.test.ts`, `src/lib/travelAssistant/flightBoardingPassHandoff.test.ts`, `src/lib/travelAssistant/homeTravelDayCoach.test.ts` |
+| G57 | `src/lib/travelAssistant/flightBoardingPassFacts.test.ts`, `src/lib/travelAssistant/flightBoardingPassHandoff.test.ts`, `src/lib/travelAssistant/checkInHandoff.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

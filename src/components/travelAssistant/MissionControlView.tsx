@@ -63,6 +63,7 @@ import {
   resolveActiveTravelDayCoach,
   resolveEffectiveTravelTimezone,
 } from "@/lib/travelAssistant/homeTravelDayCoach";
+import { resolveFlightBoardingPassesForDay } from "@/lib/travelAssistant/flightBoardingPassHandoff";
 import {
   resolveTrainTicketsForDay,
   resolveTrainTicketOpenTarget,
@@ -495,6 +496,16 @@ export function MissionControlView({
   const travelDayLead = Boolean(activeTravelDay);
   const travelDayCoach = activeTravelDay?.coach ?? null;
 
+  const storedBoardingPassHandoffs = useMemo(() => {
+    const dateKey =
+      activeTravelDay?.dateKey ?? travelerTodayKey(Date.now(), travelDayTimezone);
+    return resolveFlightBoardingPassesForDay(reservations, dateKey);
+  }, [activeTravelDay?.dateKey, reservations, travelDayTimezone]);
+
+  const showAirlineCheckInHandoff = Boolean(
+    checkInHandoff && storedBoardingPassHandoffs.length === 0,
+  );
+
   const effectiveNextFlight = useMemo(() => {
     if (travelDayCoach?.flight?.id) {
       const booked = reservations.find((row) => row.id === travelDayCoach.flight!.id);
@@ -732,8 +743,8 @@ export function MissionControlView({
           </button>
         </article>
 
-        {checkInHandoff && journeyPhase?.kind !== "airborne" ? (
-          <CheckInHandoffCard content={checkInHandoff} />
+        {showAirlineCheckInHandoff && journeyPhase?.kind !== "airborne" ? (
+          <CheckInHandoffCard content={checkInHandoff!} />
         ) : null}
 
         <button
@@ -1388,7 +1399,7 @@ export function MissionControlView({
         </button>
       ) : null}
 
-      {checkInHandoff ? <CheckInHandoffCard content={checkInHandoff} /> : null}
+      {showAirlineCheckInHandoff ? <CheckInHandoffCard content={checkInHandoff!} /> : null}
 
       {snap.tonightHotel &&
       (snap.phase === "at_destination" || snap.phase === "departure_day") &&
