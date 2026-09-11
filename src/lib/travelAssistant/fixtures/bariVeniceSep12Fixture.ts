@@ -131,7 +131,6 @@ export const BARI_VENICE_SEP_12_RESERVATIONS = [
     flightDepartureAirport: "BRI",
     flightArrivalAirport: "VCE",
     flightArrivalTerminal: "1",
-    flightNumber: "AZ1464",
     timezone: "Europe/Rome",
   },
   {

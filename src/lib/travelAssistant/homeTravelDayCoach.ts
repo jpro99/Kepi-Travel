@@ -87,7 +87,12 @@ function flightsOnDay(reservations: HomeStayReservation[], dateKey: string): Hom
     .sort((a, b) => (a.flightDepartureTime ?? a.localTime ?? "").localeCompare(b.flightDepartureTime ?? b.localTime ?? ""));
 }
 
-function trainHeadline(reservation: HomeStayReservation): string {
+function trainHeadline(
+  reservation: Pick<
+    HomeStayReservation,
+    "location" | "title" | "provider" | "trainNumber" | "localTime"
+  >,
+): string {
   const route = reservation.location?.trim() || "Train";
   const label = [reservation.provider?.trim(), reservation.trainNumber?.trim() || reservation.title?.trim()]
     .filter(Boolean)
@@ -97,14 +102,29 @@ function trainHeadline(reservation: HomeStayReservation): string {
   return bits.join(" · ") || route;
 }
 
-function flightHeadline(flight: HomeTravelDayFlight): string {
+/** Stored-booking flight lead — never invent a flight number when the field is empty. */
+export function formatTravelDayFlightLead(flight: HomeTravelDayFlight): string {
+  const provider = flight.provider?.trim() || "ITA Airways";
   const from = flight.flightDepartureAirport?.trim() || "";
   const to = flight.flightArrivalAirport?.trim() || "";
-  const route = from && to ? `${from} → ${to}` : "Flight";
+  const route = from && to ? `${from} → ${to}` : "";
   const num = flight.flightNumber?.trim();
   const time = formatLocalTime(flight.flightDepartureTime);
-  const bits = [num ? `${num} · ${route}` : route, time ? `departs ${time}` : ""].filter(Boolean);
-  return bits.join(" · ");
+  const conf = flight.confirmationCode?.trim();
+  const terminal = flight.flightArrivalTerminal?.trim();
+  const bits = [
+    provider,
+    num || null,
+    route,
+    time ? `departs ${time}` : null,
+    conf ? `Confirmation ${conf}` : null,
+    terminal ? `Arrive Terminal ${terminal}` : null,
+  ].filter(Boolean);
+  return bits.join(" · ") || route || "Your flight today";
+}
+
+function flightHeadline(flight: HomeTravelDayFlight): string {
+  return formatTravelDayFlightLead(flight);
 }
 
 /**
@@ -122,12 +142,14 @@ export function buildBriAirportTransferHint(input: {
   );
 }
 
-function trainEndsAtBari(reservation: HomeStayReservation): boolean {
+function trainEndsAtBari(reservation: Pick<TrainTicketSourceReservation, "location" | "title">): boolean {
   const blob = `${reservation.location ?? ""} ${reservation.title ?? ""}`.toLowerCase();
   return /\bbari\b/u.test(blob);
 }
 
-function trainDepartsBariCentraleFnB(reservation: HomeStayReservation): boolean {
+function trainDepartsBariCentraleFnB(
+  reservation: Pick<TrainTicketSourceReservation, "location" | "title">,
+): boolean {
   const blob = `${reservation.location ?? ""} ${reservation.title ?? ""}`.toLowerCase();
   return /\bbari\b/u.test(blob) && /\b(fnb|c\.le|centrale)\b/u.test(blob);
 }
@@ -204,41 +226,16 @@ export function buildTravelDayWalkthroughSteps(input: {
   if (flightFromBri && input.flight && airportConnector) {
     steps.push(...buildBriAfterTrainCoachSteps());
 
-    const flightNo = input.flight.flightNumber?.trim() || "Flight";
-    const provider = input.flight.provider?.trim() || "ITA Airways";
-    const dep = formatLocalTime(input.flight.flightDepartureTime);
-    const to = input.flight.flightArrivalAirport?.trim() || "VCE";
-    const arrTerminal = input.flight.flightArrivalTerminal?.trim();
     steps.push({
       id: "flight-departure",
-      title: `${provider} ${flightNo} · BRI → ${to}${dep ? ` · departs ${dep}` : ""}`,
-      detail: [
-        input.flight.confirmationCode?.trim()
-          ? `Confirmation ${input.flight.confirmationCode.trim()}`
-          : null,
-        arrTerminal ? `Arrive Terminal ${arrTerminal}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · ") || "Your booked flight today.",
+      title: formatTravelDayFlightLead(input.flight),
+      detail: "Your booked flight today.",
     });
   } else if (input.flight) {
-    const flightNo = input.flight.flightNumber?.trim() || "Flight";
-    const from = input.flight.flightDepartureAirport?.trim() || "";
-    const to = input.flight.flightArrivalAirport?.trim() || "";
-    const dep = formatLocalTime(input.flight.flightDepartureTime);
     steps.push({
       id: "flight-departure",
-      title: `${flightNo}${from && to ? ` · ${from} → ${to}` : ""}${dep ? ` · departs ${dep}` : ""}`,
-      detail: [
-        input.flight.confirmationCode?.trim()
-          ? `Confirmation ${input.flight.confirmationCode.trim()}`
-          : null,
-        input.flight.flightArrivalTerminal
-          ? `Arrive Terminal ${input.flight.flightArrivalTerminal}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · ") || "Your booked flight today.",
+      title: formatTravelDayFlightLead(input.flight),
+      detail: "Your booked flight today.",
     });
   }
 
@@ -269,14 +266,15 @@ export function buildHomeTravelDayCoach(input: {
   const lastTrainDepartureUtcMs = lastTrain
     ? flightDepartureUtcMs({
         localTime: lastTrain.localTime,
-        timezone: lastTrain.timezone,
+        timezone: lastTrain.timezone ?? undefined,
         flightDepartureTime: lastTrain.localTime,
       })
     : null;
-  const primaryFlight =
+  const primaryFlight = (
     selectTravelDayPrimaryFlight(flights, { afterTrainDepartureUtcMs: lastTrainDepartureUtcMs }) ??
     flights[0] ??
-    null;
+    null
+  ) as HomeStayReservation | null;
 
   const flight: HomeTravelDayFlight | null = primaryFlight
     ? {

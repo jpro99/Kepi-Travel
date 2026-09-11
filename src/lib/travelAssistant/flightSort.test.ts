@@ -271,7 +271,6 @@ test("G55: selectTravelDayPrimaryFlight prefers BRI→VCE over earlier BRI→FCO
         flightDepartureAirport: "BRI",
         flightArrivalAirport: "VCE",
         flightDepartureTime: "2026-09-12 15:20",
-        flightNumber: "AZ1464",
         flightDate: "2026-09-12",
       },
     ],
@@ -281,7 +280,7 @@ test("G55: selectTravelDayPrimaryFlight prefers BRI→VCE over earlier BRI→FCO
   assert.equal(pick?.flightArrivalAirport, "VCE");
 });
 
-test("G55: mission control nextFlight on Sep 12 Bari travel day is AZ1464 BRI→VCE not AZ1616", () => {
+test("G55: mission control nextFlight on Sep 12 Bari travel day is BRI→VCE Z84T4Z not AZ1616 FCO", () => {
   const nowMs = Date.parse("2026-09-12T07:00:00Z");
   const reservations = [
     ...BARI_VENICE_SEP_12_RESERVATIONS,
@@ -313,6 +312,7 @@ test("G55: mission control nextFlight on Sep 12 Bari travel day is AZ1464 BRI→
   );
   assert.equal(snap.phase, "departure_day");
   assert.equal(snap.nextFlight?.id, "flight-bri-vce");
-  assert.equal(snap.nextFlight?.flightNumber, "AZ1464");
+  assert.equal(snap.nextFlight?.confirmationCode, "Z84T4Z");
   assert.equal(snap.nextFlight?.flightArrivalAirport, "VCE");
+  assert.equal(snap.nextFlight?.flightNumber, undefined);
 });

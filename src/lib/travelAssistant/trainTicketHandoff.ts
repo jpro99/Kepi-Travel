@@ -16,6 +16,7 @@ export interface TrainTicketSourceReservation extends ReservationLinkInput {
   id: string;
   title?: string;
   trainNumber?: string;
+  timezone?: string | null;
   plannedOnly?: boolean;
   boardingPassUrl?: string;
 }

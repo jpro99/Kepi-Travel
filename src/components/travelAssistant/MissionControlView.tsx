@@ -56,6 +56,7 @@ import {
   travelerTodayKey,
 } from "@/lib/travelAssistant/homeTodayCoach";
 import {
+  formatTravelDayFlightLead,
   homeTravelDayCoachNextAction,
   resolveTodayTravelDayCoach,
   resolveTomorrowTravelDayCoach,
@@ -1041,21 +1042,9 @@ export function MissionControlView({
                 <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
                   Flight today
                 </p>
-                <p className="mt-1 text-[16px] font-semibold text-[#1D1D1F]">
-                  {travelDayCoach.flight.flightNumber || "Flight"} ·{" "}
-                  {travelDayCoach.flight.flightDepartureAirport} →{" "}
-                  {travelDayCoach.flight.flightArrivalAirport}
+                <p className="mt-1 text-[16px] font-semibold leading-snug text-[#1D1D1F]">
+                  {formatTravelDayFlightLead(travelDayCoach.flight)}
                 </p>
-                {travelDayCoach.flight.flightArrivalTerminal ? (
-                  <p className="mt-1 text-[14px] text-[#6E6E73]">
-                    Arrive Terminal {travelDayCoach.flight.flightArrivalTerminal}
-                  </p>
-                ) : null}
-                {travelDayCoach.flight.confirmationCode ? (
-                  <p className="mt-1 text-[14px] text-[#6E6E73]">
-                    Confirmation {travelDayCoach.flight.confirmationCode}
-                  </p>
-                ) : null}
               </button>
             ) : null}
           </div>

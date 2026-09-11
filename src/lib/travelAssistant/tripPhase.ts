@@ -530,13 +530,13 @@ export function buildMissionControlSnapshot(
     const lastTrainDepMs = lastTrain
       ? flightDepartureUtcMs({
           localTime: lastTrain.localTime,
-          timezone: lastTrain.timezone,
+          timezone: lastTrain.timezone ?? undefined,
           flightDepartureTime: lastTrain.localTime,
         })
       : null;
     const primary = selectTravelDayPrimaryFlight(todayFlights, {
       afterTrainDepartureUtcMs: lastTrainDepMs,
-    });
+    }) as MissionControlReservation | null;
     if (primary) nextFlight = primary;
   }
 

@@ -6,6 +6,7 @@ import {
   buildHomeTravelDayCoach,
   buildTravelDayWalkthroughSteps,
   dayHasBookedTravelMoves,
+  formatTravelDayFlightLead,
   hasActiveTravelDayCoach,
   homeTravelDayCoachNextAction,
   resolveTomorrowTravelDayCoach,
@@ -51,6 +52,10 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
   assert.match(coach!.trainHandoffs[1]!.headline, /91312/i);
   assert.equal(coach!.trainHandoffs[0]!.passengerTickets.length, 2);
   assert.equal(coach!.trainHandoffs[1]!.passengerTickets.length, 2);
+  assert.equal(coach!.flight?.confirmationCode, "Z84T4Z");
+  assert.equal(coach!.flight?.flightNumber, undefined);
+  assert.match(formatTravelDayFlightLead(coach!.flight!), /ITA Airways.*BRI → VCE.*Z84T4Z/i);
+  assert.doesNotMatch(formatTravelDayFlightLead(coach!.flight!), /AZ1464/i);
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[0]!.passengerName, /Stephanie/i);
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[1]!.passengerName, /Jeffery/i);
   assert.match(coach!.trainHandoffs[0]!.passengerTickets[0]!.actionUrl, /passenger=stephanie/i);
@@ -70,10 +75,12 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
   assert.match(walkText, /single acceptance area/i);
   assert.match(walkText, /Stephanie/i);
   assert.match(walkText, /Jeffery/i);
-  assert.match(walkText, /AZ1464/i);
+  assert.match(walkText, /ITA Airways/i);
+  assert.match(walkText, /BRI.*VCE/i);
   assert.match(walkText, /3:20|15:20/i);
   assert.match(walkText, /Terminal 1/i);
   assert.match(walkText, /Z84T4Z/i);
+  assert.doesNotMatch(walkText, /AZ1464/i);
   assert.doesNotMatch(walkText, /\bgate\s+[AB]\d{1,2}\b/i);
   assert.doesNotMatch(walkText, /ITA door/i);
 });
@@ -94,7 +101,7 @@ test("G55: walkthrough order is 8312 → Centrale → 91312 → BRI coach (4) �
   const idxTunnel = titles.findIndex((title) => /tunnel into arrivals/i.test(title));
   const idxArrivals = titles.findIndex((title) => /Ground floor = arrivals/i.test(title));
   const idxCheckIn = titles.findIndex((title) => /isole A\/B and C\/D/i.test(title));
-  const idxFlight = titles.findIndex((title) => /AZ1464|BRI → VCE/u.test(title));
+  const idxFlight = titles.findIndex((title) => /BRI → VCE/u.test(title));
   assert.ok(idx8312 >= 0 && idxCentrale > idx8312);
   assert.ok(idx91312 > idxCentrale);
   assert.ok(idxKwStop > idx91312);
@@ -217,7 +224,6 @@ test("G55: train + BRI flight covers Lecce→Venice connector hop", () => {
         flightArrivalAirport: "VCE",
         flightDate: "2026-09-12",
         localTime: "2026-09-12 15:20",
-        flightNumber: "AZ1464",
       },
     ],
     [
