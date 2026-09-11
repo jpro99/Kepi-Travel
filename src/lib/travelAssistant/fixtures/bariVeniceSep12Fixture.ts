@@ -13,6 +13,7 @@ import {
   type NamedPdfAttachment,
 } from "@/lib/travelAssistant/railPassengerTicketLinks";
 import type { ReservationSourceLink } from "@/lib/travelAssistant/reservationLinks";
+import type { FlightBoardingPassSourceReservation } from "@/lib/travelAssistant/flightBoardingPassStored";
 import { formatNamedPdfSection } from "@/lib/travelAssistant/emailSourceText";
 
 export const BARI_VENICE_TRIP_ID = "trip-europe-2026";
@@ -178,7 +179,7 @@ function passengerLinksForLeg(reservationId: string): ReservationSourceLink[] {
   });
 }
 
-export const BARI_VENICE_SEP_12_RESERVATIONS = [
+export const BARI_VENICE_SEP_12_RESERVATIONS: FlightBoardingPassSourceReservation[] = [
   {
     id: "lecce-stay",
     type: "hotel",
@@ -248,10 +249,11 @@ export const BARI_VENICE_SEP_12_RESERVATIONS = [
     hotelSearchCity: "Venice",
     timezone: "Europe/Rome",
   },
-] as const;
+];
 
 /** CEO partial state — FCO→VCE boarding passes ingested; BRI→FCO still missing. */
-export const BARI_VENICE_PARTIAL_BOARDING_RESERVATIONS = BARI_VENICE_SEP_12_RESERVATIONS.map((row) => {
+export const BARI_VENICE_PARTIAL_BOARDING_RESERVATIONS: FlightBoardingPassSourceReservation[] =
+  BARI_VENICE_SEP_12_RESERVATIONS.map((row) => {
   if (row.id !== "flight-bri-vce") return row;
   return {
     ...row,

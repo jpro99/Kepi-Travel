@@ -32,6 +32,7 @@ import {
   resolveFlightBoardingPassesForDay,
   type FlightBoardingPassHandoffContent,
 } from "@/lib/travelAssistant/flightBoardingPassHandoff";
+import type { FlightBoardingPassSourceReservation } from "@/lib/travelAssistant/flightBoardingPassStored";
 
 export interface HomeTravelDayFlight {
   id: string;
@@ -90,7 +91,10 @@ function flightDepDay(reservation: HomeStayReservation): string {
   return canonicalFlightDepartureDay(reservation) || dateOnly(reservation.localTime);
 }
 
-function flightsOnDay(reservations: HomeStayReservation[], dateKey: string): HomeStayReservation[] {
+function flightsOnDay(
+  reservations: readonly HomeStayReservation[],
+  dateKey: string,
+): HomeStayReservation[] {
   return reservations
     .map(normalizeTravelDayFlightReservation)
     .filter(isBookedFlight)
@@ -352,7 +356,7 @@ export function resolveEffectiveTravelTimezone(
 }
 
 export function buildHomeTravelDayCoach(input: {
-  reservations: HomeStayReservation[];
+  reservations: readonly HomeStayReservation[];
   dateKey: string;
   timezone?: string | null;
   tripId?: string | null;
@@ -371,7 +375,7 @@ export function buildHomeTravelDayCoach(input: {
     .filter((content): content is TrainTicketHandoffContent => Boolean(content));
 
   const flightBoardingHandoffs = resolveFlightBoardingPassesForDay(
-    input.reservations,
+    input.reservations as FlightBoardingPassSourceReservation[],
     input.dateKey,
   );
 
@@ -454,7 +458,7 @@ export function dayHasBookedTravelMoves(
 
 /** Train + flight on the same calendar day — Sep 12 Bari→Venice travel-day pattern. */
 export function isTrainFlightTravelDayPattern(
-  reservations: HomeStayReservation[],
+  reservations: readonly HomeStayReservation[],
   dateKey: string,
 ): boolean {
   const trains = trainReservationsOnDayExpanded(
@@ -470,16 +474,19 @@ export function isTrainFlightTravelDayPattern(
  * Partial leg ingest OK (e.g. FCO→VCE only until BRI→FCO is forwarded).
  */
 export function isAirTravelDayWithStoredPasses(
-  reservations: HomeStayReservation[],
+  reservations: readonly HomeStayReservation[],
   dateKey: string,
 ): boolean {
   if (flightsOnDay(reservations, dateKey).length === 0) return false;
-  return hasStoredFlightBoardingPassesOnDay(reservations, dateKey);
+  return hasStoredFlightBoardingPassesOnDay(
+    reservations as FlightBoardingPassSourceReservation[],
+    dateKey,
+  );
 }
 
 /** Train+flight travel day OR flight-only day with stored boarding-pass artifacts. */
 export function shouldActivateTravelDayCoach(
-  reservations: HomeStayReservation[],
+  reservations: readonly HomeStayReservation[],
   dateKey: string,
 ): boolean {
   if (isTrainFlightTravelDayPattern(reservations, dateKey)) return true;

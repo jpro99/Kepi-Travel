@@ -220,7 +220,7 @@ export interface CheckInSourceReservation {
   flightNumber?: string;
   flightAirline?: string;
   provider?: string;
-  confirmationCode?: string;
+  confirmationCode?: string | null;
   flightDepartureAirport?: string;
   flightDepartureTime?: string;
   flightDate?: string;
@@ -258,7 +258,7 @@ export function resolveNextCheckInHandoff(
         flightNumber: row.flight.flightNumber,
         flightAirline: row.flight.flightAirline,
         provider: row.flight.provider,
-        confirmationCode: row.flight.confirmationCode,
+        confirmationCode: row.flight.confirmationCode ?? undefined,
         flightDepartureAirport: row.flight.flightDepartureAirport,
         departureUtcMs: row.departureUtcMs,
         boardingPassUrl:

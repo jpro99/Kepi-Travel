@@ -7,6 +7,7 @@ import {
   ITA_STEPHANIE_BRI_FCO_BOARDING_TEXT,
   ITA_STEPHANIE_FCO_VCE_BOARDING_TEXT,
 } from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
+import type { SessionReservation } from "@/lib/travelAssistant/clientSessionState";
 import {
   buildBoardingPassArtifactsFromForward,
   extractBoardingPassRoute,
@@ -76,7 +77,7 @@ test("G56: ingest merges BRI→FCO boarding pass onto Z84T4Z summary flight", ()
     subject: "Boarding pass — BRI to FCO",
     text: "Booking code Z84T4Z",
     tripId: BARI_VENICE_TRIP_ID,
-    reservations: [...reservations],
+    reservations: [...reservations] as SessionReservation[],
     pdfAttachments: [
       { filename: "Stephanie-Russell-1980665325.pdf", text: ITA_STEPHANIE_BRI_FCO_BOARDING_TEXT },
       { filename: "Jeffery Paul-Russell-1980665325.pdf", text: ITA_JEFFERY_BRI_FCO_BOARDING_TEXT },

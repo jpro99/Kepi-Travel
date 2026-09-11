@@ -186,7 +186,10 @@ test("live ITA summary row without route title still counts as booked BRI→VCE 
 
 test("single train reservation expands Reg 91312 from stored J7HBM5 PDF", () => {
   const singleTrain = BARI_VENICE_SEP_12_RESERVATIONS.filter((row) => row.id === "train-fa8312-lecce-bari");
-  const expanded = trainReservationsOnDayExpanded(singleTrain, "2026-09-12");
+  const expanded = trainReservationsOnDayExpanded(
+    singleTrain as import("@/lib/travelAssistant/trainTicketHandoff").TrainTicketSourceReservation[],
+    "2026-09-12",
+  );
   assert.equal(expanded.length, 2);
   assert.match(expanded[1]?.trainNumber ?? "", /91312/);
 });

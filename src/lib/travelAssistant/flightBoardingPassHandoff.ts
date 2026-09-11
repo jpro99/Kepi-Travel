@@ -12,12 +12,16 @@ import {
   legSlugFromRoute,
   type BoardingPassRoute,
 } from "@/lib/travelAssistant/flightBoardingPassIngest";
-import { reservationHasStoredBoardingPassArtifacts } from "@/lib/travelAssistant/flightBoardingPassStored";
+import {
+  reservationHasStoredBoardingPassArtifacts,
+  type FlightBoardingPassSourceReservation,
+} from "@/lib/travelAssistant/flightBoardingPassStored";
 import { isOpenableTicketUrl } from "@/lib/travelAssistant/trainTicketHandoff";
 import { isBookedFlightReservation } from "@/lib/travelAssistant/travelDayFlightView";
-import type { HomeStayReservation } from "@/lib/travelAssistant/homeTodayCoach";
 import type { TrainPassengerTicketAction } from "@/lib/travelAssistant/trainTicketHandoff";
 import { passengerSlugFromName } from "@/lib/travelAssistant/railPassengerTicketLinks";
+
+export type { FlightBoardingPassSourceReservation };
 
 export interface FlightBoardingPassHandoffContent {
   reservationId: string;
@@ -29,13 +33,6 @@ export interface FlightBoardingPassHandoffContent {
   honestyNote: string;
 }
 
-export interface FlightBoardingPassSourceReservation extends HomeStayReservation {
-  sourceLinks?: Array<{ label: string; url: string; kind: string }>;
-  originalEmailText?: string;
-  hasPdfAttachment?: boolean;
-  boardingPassUrl?: string;
-}
-
 function flightDateKey(reservation: FlightBoardingPassSourceReservation): string | null {
   const raw = reservation.flightDepartureTime ?? reservation.localTime ?? reservation.flightDate ?? "";
   if (raw.length < 10) return null;
@@ -43,7 +40,7 @@ function flightDateKey(reservation: FlightBoardingPassSourceReservation): string
 }
 
 export function flightsOnTravelDay(
-  reservations: FlightBoardingPassSourceReservation[],
+  reservations: readonly FlightBoardingPassSourceReservation[],
   dateKey: string,
 ): FlightBoardingPassSourceReservation[] {
   return reservations
@@ -133,7 +130,10 @@ export function buildFlightBoardingPassHandoffForLeg(
   const facts = route
     ? factsForStoredLeg(reservation.originalEmailText, route)
     : {};
-  const detail = formatBoardingPassLegDetail(facts, reservation.confirmationCode);
+  const detail = formatBoardingPassLegDetail(
+    facts,
+    reservation.confirmationCode ?? undefined,
+  );
 
   return {
     reservationId: reservation.id,
@@ -148,7 +148,7 @@ export function buildFlightBoardingPassHandoffForLeg(
 }
 
 export function resolveFlightBoardingPassesForDay(
-  reservations: FlightBoardingPassSourceReservation[],
+  reservations: readonly FlightBoardingPassSourceReservation[],
   dateKey: string,
 ): FlightBoardingPassHandoffContent[] {
   const flights = flightsOnTravelDay(reservations, dateKey).filter(
@@ -172,7 +172,7 @@ export function resolveFlightBoardingPassesForDay(
 }
 
 export function hasStoredFlightBoardingPassesOnDay(
-  reservations: FlightBoardingPassSourceReservation[],
+  reservations: readonly FlightBoardingPassSourceReservation[],
   dateKey: string,
 ): boolean {
   return resolveFlightBoardingPassesForDay(reservations, dateKey).length > 0;

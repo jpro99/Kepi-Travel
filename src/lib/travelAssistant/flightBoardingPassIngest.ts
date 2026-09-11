@@ -147,14 +147,14 @@ function reservationContainsLeg(
 }
 
 /** Find the flight reservation to attach a boarding-pass artifact to. */
-export function findBoardingPassTargetReservation(
-  reservations: readonly HomeStayReservation[],
+export function findBoardingPassTargetReservation<T extends HomeStayReservation>(
+  reservations: readonly T[],
   input: {
     route: BoardingPassRoute;
     confirmationCode?: string;
     dateKey?: string;
   },
-): HomeStayReservation | null {
+): T | null {
   const code = input.confirmationCode?.trim().toUpperCase() ?? "";
   const flights = reservations.filter(isBookedFlightReservation);
 
@@ -246,7 +246,10 @@ export function mergeBoardingPassArtifactIntoReservation(
     originalEmailText: mergedText,
     sourceEmailId: artifact.emailId || existing.sourceEmailId,
     sourceEmailSubject: artifact.emailSubject || existing.sourceEmailSubject,
-    sourceLinks: mergeSourceLinks(existing.sourceLinks, sourceLink),
+    sourceLinks: mergeSourceLinks(
+      existing.sourceLinks as ReservationSourceLink[] | undefined,
+      sourceLink,
+    ),
   };
 }
 
