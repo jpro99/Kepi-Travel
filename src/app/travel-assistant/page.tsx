@@ -324,6 +324,7 @@ import {
   type CalendarSyncSource,
 } from "@/lib/travelAssistant/calendarSyncClient";
 import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
+import { travelerTodayKey } from "@/lib/travelAssistant/homeTodayCoach";
 import {
   buildTripReadinessSummary,
   detectScheduleCollisions,
@@ -5434,7 +5435,7 @@ export default function TravelAssistantPage() {
 
   useEffect(() => {
     if (!activeTripId) return;
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayKey = travelerTodayKey(Date.now(), travelerTimezoneForHome);
     setSupportLiveContext({
       tripId: activeTripId,
       tripName: activeTrip?.name ?? null,
@@ -5476,6 +5477,7 @@ export default function TravelAssistantPage() {
     guidanceLocationStatus,
     journeyPhase.kind,
     travelerCaptureFactsLine,
+    travelerTimezoneForHome,
   ]);
 
   useEffect(() => {

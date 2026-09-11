@@ -313,7 +313,11 @@ export function detectMissionPhase(
     return "problem";
   }
 
-  const todayKey = isoDayFromMs(nowMs);
+  const travelerTimezone = input.travelerTimezone ?? null;
+  const todayKey =
+    travelerTimezone?.trim()
+      ? travelerTodayKey(nowMs, travelerTimezone)
+      : isoDayFromMs(nowMs);
   const first = firstOutboundFlight(reservations, nowMs);
   const last = lastReturnFlight(reservations);
   const tripStart = dateOnly(input.startDate) || (first ? flightDepDay(first) : "");

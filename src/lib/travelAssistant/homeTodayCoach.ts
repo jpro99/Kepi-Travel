@@ -242,7 +242,7 @@ function formatShortDayLabel(dateKey: string, timezone?: string | null): string 
   }
 }
 
-function formatLocalTime(localTime: string | undefined): string | null {
+export function formatLocalTime(localTime: string | undefined): string | null {
   const match = (localTime ?? "").match(/\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/u);
   if (!match) return null;
   let hour = Number(match[1]);

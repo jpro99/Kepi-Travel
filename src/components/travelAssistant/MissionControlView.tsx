@@ -53,7 +53,13 @@ import type { StopDateRange } from "@/lib/decision/stopDates";
 import {
   buildHomeTodayCoach,
   homeTodayCoachNextAction,
+  travelerTodayKey,
 } from "@/lib/travelAssistant/homeTodayCoach";
+import {
+  buildHomeTravelDayCoach,
+  homeTravelDayCoachNextAction,
+  resolveTomorrowTravelDayCoach,
+} from "@/lib/travelAssistant/homeTravelDayCoach";
 import {
   resolveTrainTicketsForDay,
   resolveTrainTicketOpenTarget,
@@ -453,6 +459,54 @@ export function MissionControlView({
   const showStrandedCard =
     strandedDetection.shouldPrompt && strandedDetection.prompt != null;
 
+  const calendarTodayKey = useMemo(
+    () => travelerTodayKey(Date.now(), travelerTimezone ?? snap.tonightHotel?.timezone ?? null),
+    [travelerTimezone, snap.tonightHotel?.timezone],
+  );
+
+  const travelDayCoach = useMemo(() => {
+    if (!showTravelOps) return null;
+    if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
+    if (snap.phase === "departure_day") {
+      return buildHomeTravelDayCoach({
+        reservations,
+        dateKey: calendarTodayKey,
+        timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+        tripId,
+        flightLeaveByHint: snap.leaveByHint,
+      });
+    }
+    return null;
+  }, [
+    showTravelOps,
+    snap.phase,
+    snap.leaveByHint,
+    journeyPhase?.kind,
+    reservations,
+    calendarTodayKey,
+    travelerTimezone,
+    snap.tonightHotel,
+    tripId,
+  ]);
+
+  const tomorrowTravelDayCoach = useMemo(() => {
+    if (!showTravelOps || snap.phase !== "at_destination") return null;
+    if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
+    return resolveTomorrowTravelDayCoach({
+      reservations,
+      timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+      tripId,
+    });
+  }, [
+    showTravelOps,
+    snap.phase,
+    journeyPhase?.kind,
+    reservations,
+    travelerTimezone,
+    snap.tonightHotel,
+    tripId,
+  ]);
+
   const todayCoach = useMemo(() => {
     if (!showTravelOps || snap.phase !== "at_destination") return null;
     if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
@@ -500,6 +554,16 @@ export function MissionControlView({
     [todayCoach, nextTravelDayTrainHandoffs, nextTravelDayTicketUrl],
   );
 
+  const travelDayCoachAction = useMemo(
+    () =>
+      travelDayCoach
+        ? homeTravelDayCoachNextAction(travelDayCoach, {
+            primaryTicketUrl: travelDayCoach.trainHandoffs[0]?.primaryActionUrl ?? null,
+          })
+        : null,
+    [travelDayCoach],
+  );
+
   const walk = useMemo(
     () =>
       resolveTripWalk({
@@ -520,8 +584,8 @@ export function MissionControlView({
         connectionCalm,
         airportSpotlight,
         strandedPrompt: showStrandedCard ? strandedDetection.prompt : null,
-        todayCoach: todayCoachAction,
-        stayLeaveCue: todayCoach?.leaveCue ?? null,
+        todayCoach: travelDayCoachAction ?? todayCoachAction,
+        stayLeaveCue: travelDayCoach?.leaveCue ?? todayCoach?.leaveCue ?? null,
       }),
     [
       journeyPhase,
@@ -539,12 +603,18 @@ export function MissionControlView({
       airportSpotlight,
       showStrandedCard,
       strandedDetection.prompt,
+      travelDayCoachAction,
       todayCoachAction,
+      travelDayCoach?.leaveCue,
       todayCoach?.leaveCue,
     ],
   );
+  const travelDayLead = Boolean(travelDayCoach);
+  const eveBeforeTravelDayLead = Boolean(tomorrowTravelDayCoach && todayCoach?.nextTravelMove);
   const travelTakeover =
-    journeyPhase != null && isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
+    !travelDayLead &&
+    journeyPhase != null &&
+    isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
 
   // I36 — Wallet-grade travel day: one headline, one CTA, nothing else.
   if (travelTakeover) {
@@ -697,8 +767,14 @@ export function MissionControlView({
 
   const activeStatus =
     zoom === "today" ? snap.today.status : zoom === "week" ? weekStatus(snap.week) : snap.tripStatus;
-  const stayCoachLead = todayCoach && zoom === "today" && showTravelOps && !prepMode;
-  const activeSummary = stayCoachLead
+  const stayCoachLead =
+    (travelDayLead || eveBeforeTravelDayLead || todayCoach) &&
+    zoom === "today" &&
+    showTravelOps &&
+    !prepMode;
+  const activeSummary = travelDayLead && travelDayCoach
+    ? `${travelDayCoach.dayLabel} — ${travelDayCoach.leadDetail}`
+    : stayCoachLead && todayCoach?.nextTravelMove && !travelDayLead
     ? todayCoach.nextTravelMove
       ? `${todayCoach.nextTravelMove.dayLabel} — ${todayCoach.nextTravelMove.headline}. ${todayCoach.nextTravelMove.detail}`
       : [todayCoach.leadDetail, todayCoach.tomorrowDetail, todayCoach.transferHint]
@@ -843,55 +919,117 @@ export function MissionControlView({
           {statusLabel(activeStatus)}
         </p>
         <h2 className="mt-1 text-[22px] font-semibold tracking-tight text-[#1D1D1F]">
-          {stayCoachLead
-            ? todayCoach.leadTitle
-            : heroTitle(activeStatus, zoom, {
-                day: snap.today,
-                daysUntil: snap.daysUntilDeparture,
-                prepMode,
-              })}
+          {travelDayLead && travelDayCoach
+            ? travelDayCoach.headline
+            : stayCoachLead && todayCoach
+              ? todayCoach.leadTitle
+              : heroTitle(activeStatus, zoom, {
+                  day: snap.today,
+                  daysUntil: snap.daysUntilDeparture,
+                  prepMode,
+                })}
         </h2>
         <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
 
-        <dl className="mt-3 space-y-2 rounded-xl bg-white px-3 py-3">
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-              Are you okay?
-            </dt>
-            <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.okay.line}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-              What’s next?
-            </dt>
-            <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.next.title}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-              When do you leave?
-            </dt>
-            <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
-              {walk.leaveBy ??
-                (prepMode
-                  ? "Not the leave window yet"
-                  : stayCoachLead && todayCoach?.nextTravelMove
-                    ? todayCoach.nextTravelMove.detail
-                    : "No leave time on the trip yet")}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
-              What can break?
-            </dt>
-            <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
-              {walk.canBreak.length > 0
-                ? walk.canBreak.map((item) => item.title).join(" · ")
-                : "Nothing flagged"}
-            </dd>
-          </div>
-        </dl>
+        {!travelDayLead ? (
+          <dl className="mt-3 space-y-2 rounded-xl bg-white px-3 py-3">
+            <div>
+              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                Are you okay?
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.okay.line}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                What’s next?
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-semibold text-[#1D1D1F]">{walk.next.title}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                When do you leave?
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
+                {walk.leaveBy ??
+                  (prepMode
+                    ? "Not the leave window yet"
+                    : stayCoachLead && todayCoach?.nextTravelMove
+                      ? todayCoach.nextTravelMove.detail
+                      : "No leave time on the trip yet")}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                What can break?
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-medium leading-snug text-[#1D1D1F]">
+                {walk.canBreak.length > 0
+                  ? walk.canBreak.map((item) => item.title).join(" · ")
+                  : "Nothing flagged"}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
 
-        {stayCoachLead && todayCoach.nextTravelMove ? (
+        {travelDayLead && travelDayCoach ? (
+          <div className="mt-3 space-y-2">
+            {travelDayCoach.leaveCue ? (
+              <div className="rounded-xl bg-white px-3 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Leave-by
+                </p>
+                <p className="mt-1 text-[16px] font-semibold text-[#1D1D1F]">{travelDayCoach.leaveCue}</p>
+              </div>
+            ) : null}
+            {travelDayCoach.trainHandoffs.length > 0 ? (
+              travelDayCoach.trainHandoffs.map((handoff) => (
+                <TrainTicketHandoffCard
+                  key={handoff.reservationId}
+                  content={handoff}
+                  eyebrow={`Travel day · ${travelDayCoach.dayLabel}`}
+                />
+              ))
+            ) : null}
+            {travelDayCoach.airportTransferHint ? (
+              <div className="rounded-xl bg-white px-3 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  After the train
+                </p>
+                <p className="mt-1 text-[15px] leading-relaxed text-[#1D1D1F]">
+                  {travelDayCoach.airportTransferHint}
+                </p>
+              </div>
+            ) : null}
+            {travelDayCoach.flight ? (
+              <button
+                type="button"
+                onClick={() => onReservationTap?.(travelDayCoach.flight!.id)}
+                className="w-full rounded-xl bg-white px-3 py-3 text-left"
+              >
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+                  Flight today
+                </p>
+                <p className="mt-1 text-[16px] font-semibold text-[#1D1D1F]">
+                  {travelDayCoach.flight.flightNumber || "Flight"} ·{" "}
+                  {travelDayCoach.flight.flightDepartureAirport} →{" "}
+                  {travelDayCoach.flight.flightArrivalAirport}
+                </p>
+                {travelDayCoach.flight.flightArrivalTerminal ? (
+                  <p className="mt-1 text-[14px] text-[#6E6E73]">
+                    Arrive Terminal {travelDayCoach.flight.flightArrivalTerminal}
+                  </p>
+                ) : null}
+                {travelDayCoach.flight.confirmationCode ? (
+                  <p className="mt-1 text-[14px] text-[#6E6E73]">
+                    Confirmation {travelDayCoach.flight.confirmationCode}
+                  </p>
+                ) : null}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {stayCoachLead && todayCoach?.nextTravelMove && !travelDayLead ? (
           <div className="mt-3 space-y-2">
             {nextTravelDayTrainHandoffs.length > 0 ? (
               nextTravelDayTrainHandoffs.map((handoff) => (
@@ -1045,7 +1183,7 @@ export function MissionControlView({
           </div>
         ) : null}
 
-        {!(stayCoachLead && todayCoach?.nextTravelMove) ? (
+        {!(travelDayLead || (stayCoachLead && todayCoach?.nextTravelMove)) ? (
         <div
           className={`mt-4 rounded-2xl px-4 py-4 ${
             nextAction.kind === "ready"
