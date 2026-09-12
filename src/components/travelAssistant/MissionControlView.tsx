@@ -482,6 +482,7 @@ export function MissionControlView({
       timezone: travelDayTimezone,
       tripId,
       flightLeaveByHint: snap.leaveByHint,
+      atFlightDepartureAirport: atAirport,
     });
   }, [
     showTravelOps,
@@ -490,10 +491,12 @@ export function MissionControlView({
     travelDayTimezone,
     tripId,
     snap.leaveByHint,
+    atAirport,
   ]);
 
   const travelDayLead = Boolean(activeTravelDay);
   const travelDayCoach = activeTravelDay?.coach ?? null;
+  const travelDayTrainsComplete = travelDayCoach?.trainsComplete ?? false;
 
   const effectiveNextFlight = useMemo(() => {
     if (travelDayCoach?.flight?.id) {
@@ -605,7 +608,10 @@ export function MissionControlView({
           : undefined,
         storedDepartureGate: effectiveNextFlight?.flightDepartureGate,
         connectionCalm,
-        airportSpotlight: travelDayCoach?.hasTrainBeforeFlight ? null : airportSpotlight,
+        airportSpotlight:
+          travelDayCoach?.hasTrainBeforeFlight && !travelDayTrainsComplete
+            ? null
+            : airportSpotlight,
         strandedPrompt: showStrandedCard ? strandedDetection.prompt : null,
         todayCoach: travelDayCoachAction ?? todayCoachAction,
         stayLeaveCue: travelDayCoach?.leaveCue ?? todayCoach?.leaveCue ?? null,
@@ -626,6 +632,7 @@ export function MissionControlView({
       connectionCalm,
       airportSpotlight,
       travelDayCoach?.hasTrainBeforeFlight,
+      travelDayTrainsComplete,
       showStrandedCard,
       strandedDetection.prompt,
       travelDayCoachAction,
@@ -635,7 +642,7 @@ export function MissionControlView({
     ],
   );
   const travelTakeover =
-    !travelDayLead &&
+    (!travelDayLead || travelDayTrainsComplete) &&
     journeyPhase != null &&
     isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
 
@@ -957,7 +964,7 @@ export function MissionControlView({
         {travelDayLead && travelDayCoach && travelDayCoach.briAirportCoachSteps.length > 0 ? (
           <BriAirportCoachCompact steps={travelDayCoach.briAirportCoachSteps} />
         ) : null}
-        {travelDayLead && travelDayCoach ? null : (
+        {travelDayLead && travelDayCoach && !travelDayCoach.trainsComplete ? null : (
           <p className="mt-1 text-[15px] leading-relaxed text-[#6E6E73]">{activeSummary}</p>
         )}
 
@@ -1011,7 +1018,7 @@ export function MissionControlView({
                 <p className="mt-1 text-[16px] font-semibold text-[#1D1D1F]">{travelDayCoach.leaveCue}</p>
               </div>
             ) : null}
-            {travelDayCoach.trainHandoffs.length > 0 ? (
+            {travelDayCoach.trainHandoffs.length > 0 && !travelDayCoach.trainsComplete ? (
               travelDayCoach.trainHandoffs.map((handoff) => (
                 <TrainTicketHandoffCard
                   key={handoff.reservationId}

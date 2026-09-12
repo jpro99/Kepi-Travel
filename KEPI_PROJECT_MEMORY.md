@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-12 (G59 BRI airport outbound coach fix)
+Last updated: 2026-09-12 (G60 train phase ends at airport)
+
+## Decision 2026-09-12 — G60: travel-day train phase must end (Jeff, BRI — 4th airport failure)
+
+G55 was implemented as "train all day" — `hasTrainBeforeFlight` blocked airport spotlight/takeover for the entire calendar day with no clock or geofence exit. Jeff at BRI 2h after Reg 91312 still saw train copy. **G60:** `areTravelDayTrainsComplete` (ARRIVO from stored PDF + 10m buffer, or geofence at departure airport); guidance GPS uses `selectActiveFlight` not storage-order find.
 
 ## Decision 2026-09-12 — G59: airport mode must show today's outbound leg, not stale inbound (Jeff, BRI)
 

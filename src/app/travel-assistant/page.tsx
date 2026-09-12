@@ -37,7 +37,8 @@ import {
   reconcileTripWindowDates,
 } from "@/lib/travelAssistant/tripWindowRepair";
 import { canonicalFlightDepartureDay, canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
-import { flightDepartureUtcMs, selectNextRemainingFlight } from "@/lib/travelAssistant/flightSort";
+import { flightDepartureUtcMs, selectNextRemainingFlight, selectTravelDayDepartureFlight } from "@/lib/travelAssistant/flightSort";
+import { selectActiveFlight } from "@/lib/travelAssistant/useActiveFlight";
 import { selectRemainingJourneyFlight } from "@/lib/travelAssistant/remainingJourneyFlight";
 import {
   nearestUpcomingFlightDepartureUtcMs,
@@ -4676,17 +4677,11 @@ export default function TravelAssistantPage() {
     });
     if (airborne) return "airborne";
 
-    // GPS-based airport proximity
-    // Prefer the next departure within 12h so early airport arrival still geofences correctly
-    const nextFlight = consumerReservationsSorted.find((r) => {
-      if (r.type !== "flight") return false;
-      const local = (r as unknown as Record<string, string>).localTime ?? "";
-      const depMs = Date.parse(local.replace("T", " ").slice(0, 16).replace(" ", "T"));
-      if (Number.isNaN(depMs)) return false;
-      const minutes = (depMs - nowMs) / 60_000;
-      return minutes > -120 && minutes < 12 * 60;
-    });
-    const deptIata = (nextFlight as unknown as Record<string,string> | undefined)?.flightDepartureAirport;
+    // GPS-based airport proximity — same selectors as Map/Airport Mode (never stale FCO→BRI).
+    const activeFlight = selectActiveFlight(consumerReservationsSorted, nowMs);
+    const travelDayFlight = selectTravelDayDepartureFlight(consumerReservationsSorted, nowMs);
+    const geofenceFlight = activeFlight?.f ?? travelDayFlight?.f;
+    const deptIata = geofenceFlight?.flightDepartureAirport;
     const proximity = getAirportProximity(guidanceUserLat, guidanceUserLon, deptIata);
     return proximity.status === "unknown" ? "unknown" : proximity.status;
   }, [guidanceUserLat, guidanceUserLon, consumerReservationsSorted]);

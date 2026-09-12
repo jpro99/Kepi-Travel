@@ -165,6 +165,26 @@ function findStations(text: string): { from: string; to: string } | null {
   return null;
 }
 
+/** ARRIVO block on Italian rail PDFs — verified local clock, not invented. */
+export function findRailArrivalLocalTimeInSegment(text: string): string | null {
+  const slash = text.match(
+    /(?:arrivo|arrival)(?:\s*\n+\s*[^\n]+)?\s*\n+\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s+(\d{1,2}[:.]\d{2})/iu,
+  );
+  if (slash?.[1] && slash[2]) {
+    const day = parseRailSlashDate(slash[1], true);
+    const time = parseRailTime(slash[2]);
+    if (day && time) return `${day} ${time}`;
+  }
+  const iso = text.match(
+    /(?:arrivo|arrival)(?:\s*\n+\s*[^\n]+)?\s*\n+\s*(\d{4}-\d{2}-\d{2})\s+(\d{1,2}[:.]\d{2})/iu,
+  );
+  if (iso?.[1] && iso[2]) {
+    const time = parseRailTime(iso[2]);
+    if (time) return `${iso[1]} ${time}`;
+  }
+  return null;
+}
+
 function findDepartureLocalTime(text: string): string | null {
   const labeled = text.match(
     /(?:partenza|departure|dep\.?)\s*[:\s]*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s+(\d{1,2}[:.]\d{2})/iu,

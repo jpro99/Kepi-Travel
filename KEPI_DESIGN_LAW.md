@@ -251,7 +251,10 @@ On any travel day with a booked check-in (hotel/Airbnb) the same calendar day, H
 **G59 — Airport mode never resurrects stale inbound legs**  
 Map/Airport coach at a departure airport must show today's **outbound** leg, not an old inbound (e.g. Sep 5 FCO→BRI while waiting for Sep 12 BRI→VCE). `selectFlightForArrivalIata` only returns legs inside the 6h post-landing window; `selectFlightForAirportIata` prefers live outbound when both arrive + depart windows overlap; `computeJourneyPhase` skips `just-landed` when an outbound from the same airport is in the live departure window; `navigatorCoachMode` follows the selected flight leg, not `journeyPhase` alone.
 
-**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/useActiveFlight.test.ts`
+**G60 — Travel-day train phase must end**  
+On train+flight days, Home/Map must not show train-first copy all day. `areTravelDayTrainsComplete` ends the rail phase when the last leg's stored **ARRIVO** time (+10m buffer) has passed, or instantly when GPS geofences at today's **departure** airport. Then: airport headline, flight leave-by, BRI after-train steps, airport spotlight, and travel-day takeover unlock. Guidance geofence uses `selectActiveFlight` / `selectTravelDayDepartureFlight` — never storage-order stale legs.
+
+**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/travelDayTrainPhase.test.ts`
 
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`

@@ -31,6 +31,7 @@ import {
   resolveTravelDayArrivalStay,
   type TravelDayArrivalStay,
 } from "@/lib/travelAssistant/travelDayArrivalStay";
+import { areTravelDayTrainsComplete } from "@/lib/travelAssistant/travelDayTrainPhase";
 
 export type { TravelDayArrivalStay };
 
@@ -63,6 +64,8 @@ export interface HomeTravelDayCoach {
   leaveCue: string | null;
   airportTransferHint: string | null;
   hasTrainBeforeFlight: boolean;
+  /** G60 — rail legs finished (scheduled arrival + buffer, or geofenced at departure airport). */
+  trainsComplete: boolean;
   /** BRI KW→tunnel→arrivals→isole — promoted above fold when Reg 91312 / airport rail present. */
   briAirportCoachSteps: TravelDayWalkthroughStep[];
   walkthroughSteps: TravelDayWalkthroughStep[];
@@ -362,13 +365,22 @@ export function resolveEffectiveTravelTimezone(
   return inferTravelerTimezoneFromReservations(reservations);
 }
 
+export function buildAirportPhaseHeadline(flight: HomeTravelDayFlight): string {
+  const dep = flight.flightDepartureAirport?.trim() || "airport";
+  const arrival = formatTravelDayArrivalLabel(flight);
+  return `At ${dep} — fly to ${arrival}`;
+}
+
 export function buildHomeTravelDayCoach(input: {
   reservations: HomeStayReservation[];
   dateKey: string;
   timezone?: string | null;
   tripId?: string | null;
   flightLeaveByHint?: string | null;
+  nowMs?: number;
+  atFlightDepartureAirport?: boolean;
 }): HomeTravelDayCoach | null {
+  const nowMs = input.nowMs ?? Date.now();
   const trains = trainReservationsOnDayExpanded(
     input.reservations as TrainTicketSourceReservation[],
     input.dateKey,
@@ -400,16 +412,26 @@ export function buildHomeTravelDayCoach(input: {
   const arrivalStay = resolveTravelDayArrivalStay(input.reservations, input.dateKey, flight);
 
   const hasTrainBeforeFlight = Boolean(primaryTrain && flight);
+  const trainsComplete = areTravelDayTrainsComplete({
+    trains,
+    nowMs,
+    atFlightDepartureAirport: input.atFlightDepartureAirport,
+  });
   const airportTransferHint = buildBriAirportTransferHint({
     trainArrivesBari: primaryTrain ? trainEndsAtBari(primaryTrain) : false,
     flightFromBri: (flight?.flightDepartureAirport?.trim().toUpperCase() ?? "") === "BRI",
   });
 
   const dayLabel = formatShortDayLabel(input.dateKey, input.timezone);
-  const headline = buildTravelDayHeadline(trains, flight);
+  const headline =
+    trainsComplete && flight
+      ? buildAirportPhaseHeadline(flight)
+      : buildTravelDayHeadline(trains, flight);
 
   const leadParts: string[] = [];
-  for (const train of trains) leadParts.push(trainHeadline(train));
+  if (!trainsComplete) {
+    for (const train of trains) leadParts.push(trainHeadline(train));
+  }
   if (flight) leadParts.push(flightHeadline(flight));
   if (arrivalStay) {
     leadParts.push(
@@ -419,7 +441,7 @@ export function buildHomeTravelDayCoach(input: {
   const leadDetail = leadParts.join(" · ") || "Your booked travel for today.";
 
   const leaveCue = (() => {
-    if (primaryTrain) {
+    if (!trainsComplete && primaryTrain) {
       const dep = formatLocalTime(primaryTrain.localTime);
       if (dep && input.flightLeaveByHint) {
         return `Train departs ${dep} · ${input.flightLeaveByHint}`;
@@ -448,6 +470,7 @@ export function buildHomeTravelDayCoach(input: {
     leaveCue,
     airportTransferHint,
     hasTrainBeforeFlight,
+    trainsComplete,
     briAirportCoachSteps,
     walkthroughSteps,
     arrivalStay,
@@ -492,6 +515,7 @@ export function resolveActiveTravelDayCoach(input: {
   timezone?: string | null;
   tripId?: string | null;
   flightLeaveByHint?: string | null;
+  atFlightDepartureAirport?: boolean;
 }): ActiveTravelDayCoachResult | null {
   const nowMs = input.nowMs ?? Date.now();
   const timezone = resolveEffectiveTravelTimezone(input.reservations, input.timezone);
@@ -504,6 +528,8 @@ export function resolveActiveTravelDayCoach(input: {
       timezone,
       tripId: input.tripId,
       flightLeaveByHint: input.flightLeaveByHint,
+      nowMs,
+      atFlightDepartureAirport: input.atFlightDepartureAirport,
     });
     if (coach) return { coach, mode: "today", dateKey: todayKey };
   }
@@ -516,6 +542,8 @@ export function resolveActiveTravelDayCoach(input: {
       timezone,
       tripId: input.tripId,
       flightLeaveByHint: input.flightLeaveByHint,
+      nowMs,
+      atFlightDepartureAirport: false,
     });
     if (coach) return { coach, mode: "tomorrow", dateKey: tomorrowKey };
   }
@@ -581,6 +609,7 @@ export function resolveTodayTravelDayCoach(input: {
   timezone?: string | null;
   tripId?: string | null;
   flightLeaveByHint?: string | null;
+  atFlightDepartureAirport?: boolean;
 }): HomeTravelDayCoach | null {
   const nowMs = input.nowMs ?? Date.now();
   const dateKey = travelerTodayKey(nowMs, input.timezone ?? null);
@@ -590,6 +619,8 @@ export function resolveTodayTravelDayCoach(input: {
     timezone: input.timezone,
     tripId: input.tripId,
     flightLeaveByHint: input.flightLeaveByHint,
+    nowMs,
+    atFlightDepartureAirport: input.atFlightDepartureAirport,
   });
 }
 
@@ -620,6 +651,8 @@ export function resolveTomorrowTravelDayCoach(input: {
     dateKey: tomorrowKey,
     timezone: input.timezone,
     tripId: input.tripId,
+    nowMs,
+    atFlightDepartureAirport: false,
   });
 }
 
@@ -627,8 +660,19 @@ export function homeTravelDayCoachNextAction(
   coach: HomeTravelDayCoach,
   options?: { primaryTicketUrl?: string | null },
 ): HomeNextAction {
+  if (coach.trainsComplete && coach.flight?.id) {
+    const dep = coach.flight.flightDepartureAirport?.trim() || "airport";
+    return {
+      kind: "airport",
+      eyebrow: `At ${dep}`,
+      title: formatTravelDayFlightLead(coach.flight),
+      detail: coach.leaveCue ?? coach.leadDetail,
+      ctaLabel: "Open Airport Mode",
+      reservationId: coach.flight.id,
+    };
+  }
   const ticketUrl = options?.primaryTicketUrl ?? coach.trainHandoffs[0]?.primaryActionUrl ?? null;
-  if (ticketUrl) {
+  if (ticketUrl && !coach.trainsComplete) {
     return {
       kind: "prep",
       eyebrow: `Travel day · ${coach.dayLabel}`,

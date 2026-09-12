@@ -52,6 +52,7 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
     dateKey: "2026-09-12",
     timezone: "Europe/Rome",
     tripId: BARI_VENICE_TRIP_ID,
+    nowMs: SEP_12_MORNING,
     flightLeaveByHint: "Leave for the airport by 12:20 PM (180 min before 3:20 PM departure — drive time not included)",
   });
   assert.ok(coach);
@@ -123,6 +124,7 @@ test("G58: travel day coach surfaces tonight Airbnb with get-there cue", () => {
     dateKey: "2026-09-12",
     timezone: "Europe/Rome",
     tripId: BARI_VENICE_TRIP_ID,
+    nowMs: SEP_12_MORNING,
   });
   assert.ok(coach?.arrivalStay);
   assert.match(coach!.arrivalStay!.propertyName, /Venice Airbnb/i);
@@ -140,6 +142,7 @@ test("G55: walkthrough order is 8312 → Centrale → 91312 → BRI coach (4) �
     dateKey: "2026-09-12",
     timezone: "Europe/Rome",
     tripId: BARI_VENICE_TRIP_ID,
+    nowMs: SEP_12_MORNING,
   });
   assert.ok(coach);
   assert.equal(coach!.briAirportCoachSteps.length, 4);
