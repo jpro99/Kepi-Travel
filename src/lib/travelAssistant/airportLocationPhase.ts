@@ -22,13 +22,21 @@ export function resolveAirportLocationPhase(input: {
   nowMs: number;
   locationStatus: UserAirportStatus | string;
   hasLoungeAccess?: boolean;
+  /** When set, stay in "departed" (in flight) until landing — never go "off" mid-air (G64). */
+  arrivalUtcMs?: number;
 }): AirportLocationPhase {
   const min = (input.departureUtcMs - input.nowMs) / 60_000;
   const status = input.locationStatus;
   const hasLounge = input.hasLoungeAccess ?? false;
+  const arrMs = input.arrivalUtcMs;
 
   if (min > 180) return "off";
-  if (min < 0) return min > -60 ? "departed" : "off";
+  if (min < 0) {
+    if (arrMs != null && !Number.isNaN(arrMs) && input.nowMs >= input.departureUtcMs && input.nowMs < arrMs) {
+      return "departed";
+    }
+    return min > -60 ? "departed" : "off";
+  }
   if (min < 20) return "final-call";
 
   if (status === "in-terminal") {

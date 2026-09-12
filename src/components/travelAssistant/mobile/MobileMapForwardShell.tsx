@@ -330,6 +330,7 @@ export function MobileMapForwardShell({
           hasActiveTrip={hasActiveTrip}
           journeyPhase={journeyPhase}
           locationStatus={locationStatus}
+          nearestAirport={nearestAirport}
           checkInHandoff={resolveNextCheckInHandoff(reservations)}
           onOpenBook={() => onNavigateTab("book")}
           onOpenPlan={() => onNavigateTab("plan")}
@@ -363,7 +364,12 @@ export function MobileMapForwardShell({
           tripId={tripId}
         />
 
-        {hasActiveTrip ? (
+        {hasActiveTrip &&
+        !travelDayHomeLead &&
+        journeyPhase.kind !== "airborne" &&
+        journeyPhase.kind !== "just-landed" &&
+        locationStatus !== "at-airport" &&
+        locationStatus !== "in-terminal" ? (
           <TravelAskPanel
             destination={destination}
             tripName={tripName}

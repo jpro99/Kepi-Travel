@@ -271,6 +271,14 @@ CapApp-SPM is Swift tools **5.9** + remote Capacitor core only (G22) so Xcode 26
 
 Consumer More, empty Home, and Plan empty states use Lucide + light Apple cards (G21). No emoji section headers, no navy empty-trip cockpit. Gold Talk CTA kept. Confirmations on the trip are untouched.
 
+## Incident 2026-09-12 — FCO connection useless: “In the air” + Polignano tourism (G65)
+
+Jeff had ~20 minutes to find his FCO→VCE gate after deplaning; Home showed “IN THE AIR FCO→VCE” + “Landing plan — VCE” and Ask Kepi said “Near Polignano a Mare” with walking-tour prompts. Fix: `resolveHomeHubConnectionSurface` leads Home with gate + connection step list; tourism `TravelAskPanel` hidden at airports; `TravelDayAskBar` uses airport IATA + connection context.
+
+## Incident 2026-09-12 — Flight/gate card flashed then vanished (G64)
+
+Jeff at/on any airport could not keep flight #, gate, or route visible — UI popped up then refreshed away. Root cause: `travelDayLead` hid the next-flight card; `selectActiveFlight` dropped the leg 60m after departure; `AirportMode` bailed when `activeFlight` null. Fix: pinned `FlightDayDock` above tab bar (24h→post-landing), extended active window through arrival, `selectNavigatorFlight` shared everywhere.
+
 ## Incident 2026-09-12 — In flight still showed Bari airport (G63)
 
 Jeff on BRI→VCE leg: app kept Bari departure map/coach instead of Venice landing plan + tonight's stay. Fix: airborne journeyPhase switches coach to arrival IATA (VCE), navigator uses onFlight, Home takeover shows "When you land" + Directions CTA.

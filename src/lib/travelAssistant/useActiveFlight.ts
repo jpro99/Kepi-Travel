@@ -27,7 +27,11 @@ import {
   deriveAirportDayCoachMode,
   type AirportDayCoachMode,
 } from "@/lib/travelAssistant/airportDayCoach";
-import { computeJourneyPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import {
+  computeJourneyPhase,
+  type JourneyPhase,
+  type JourneyReservation,
+} from "@/lib/travelAssistant/journeyPhase";
 import { resolveArrivalHotelLabel } from "@/lib/travelAssistant/airportSpotlightContext";
 import {
   flightDepartureUtcMs,
@@ -81,7 +85,21 @@ export function toUtcMs(localTime: string, timezone?: string): number {
 const WINDOW_AHEAD_MIN = 12 * 60; // 12h — early airport arrival still gets navigator
 const WINDOW_BEHIND_MIN = 60;
 
-/** Live airport mode: departure within −60min … +180min (day-of navigation). */
+function isInActiveDepartureWindow(
+  depUtcMs: number,
+  arrUtcMs: number,
+  nowMs: number,
+  aheadMinutes: number,
+  behindMinutes: number,
+): boolean {
+  const minutesUntilDep = (depUtcMs - nowMs) / 60_000;
+  if (minutesUntilDep > aheadMinutes) return false;
+  if (minutesUntilDep >= 0) return true;
+  if (!Number.isNaN(arrUtcMs) && nowMs < arrUtcMs + REMAINING_ARRIVAL_ACTIVE_MS) return true;
+  return (nowMs - depUtcMs) / 60_000 < behindMinutes;
+}
+
+/** Live airport mode: departure within −60min … +12h ahead, through arrival (G64). */
 export function selectActiveFlight(
   reservations: FlightReservation[],
   nowMs: number,
@@ -92,15 +110,78 @@ export function selectActiveFlight(
   return (
     reservations
       .filter((r) => r.type === "flight")
-      .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
+      .map((f) => ({
+        f,
+        utcMs: flightDepartureUtcMs(f),
+        arrUtcMs: flightArrivalUtcMs(f),
+      }))
       .filter(
-        ({ utcMs }) =>
+        ({ utcMs, arrUtcMs }) =>
           !isNaN(utcMs) &&
-          (utcMs - nowMs) / 60_000 < ahead &&
-          (nowMs - utcMs) / 60_000 < behind,
+          isInActiveDepartureWindow(utcMs, arrUtcMs, nowMs, ahead, behind),
       )
       .sort((a, b) => a.utcMs - b.utcMs)[0] ?? null
   );
+}
+
+/** Shared navigator pick — AirportMode, Map, and FlightDayDock use the same rules. */
+export function selectNavigatorFlight(
+  reservations: FlightReservation[],
+  nowMs: number,
+  journeyPhase: JourneyPhase,
+  options?: {
+    preferredIata?: string | null;
+    preferredMode?: "depart" | "arrive" | null;
+  },
+): ActiveFlight | null {
+  const preferredIata = options?.preferredIata?.trim().toUpperCase() ?? null;
+  const preferredMode = options?.preferredMode ?? null;
+
+  const pinnedFlight = preferredIata
+    ? selectFlightForAirportIata(reservations, preferredIata, nowMs, preferredMode)
+    : null;
+  if (pinnedFlight) return pinnedFlight;
+
+  if (journeyPhase.kind === "airborne") {
+    const f = journeyPhase.onFlight as FlightReservation;
+    const utcMs = flightDepartureUtcMs(f);
+    return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+  }
+
+  const activeFlight = selectActiveFlight(reservations, nowMs);
+
+  if (activeFlight) {
+    const justLanded =
+      journeyPhase.kind === "just-landed"
+        ? (journeyPhase.flight as FlightReservation)
+        : null;
+    if (!justLanded || justLanded.id !== activeFlight.f.id) {
+      return activeFlight;
+    }
+  }
+
+  const arrivalRemaining = selectActiveArrivalFlight(reservations, nowMs);
+  if (arrivalRemaining) {
+    const utcMs = flightArrivalUtcMs(arrivalRemaining);
+    return { f: arrivalRemaining, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+  }
+
+  if (journeyPhase.kind === "just-landed") {
+    const f = journeyPhase.flight as JourneyReservation as FlightReservation;
+    const utcMs = flightArrivalUtcMs(f);
+    if (!Number.isNaN(utcMs)) {
+      return { f, utcMs };
+    }
+  }
+
+  const remainingJourneyFlight = selectRemainingJourneyFlight(reservations, nowMs);
+  if (remainingJourneyFlight) {
+    const utcMs = flightDepartureUtcMs(remainingJourneyFlight);
+    return { f: remainingJourneyFlight as FlightReservation, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+  }
+
+  const preview = selectPreviewAirportFlight(reservations, nowMs);
+  return preview;
 }
 
 /**
@@ -338,60 +419,14 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
     [preferredIata, preferredMode, reservations, nowMs],
   );
 
-  const remainingJourneyFlight = useMemo(
-    () => selectRemainingJourneyFlight(reservations, nowMs),
-    [reservations, nowMs],
+  const navigatorFlight = useMemo(
+    () =>
+      selectNavigatorFlight(reservations, nowMs, journeyPhase, {
+        preferredIata,
+        preferredMode,
+      }),
+    [journeyPhase, preferredIata, preferredMode, reservations, nowMs],
   );
-
-  const navigatorFlight = useMemo(() => {
-    if (pinnedFlight) return pinnedFlight;
-
-    if (journeyPhase.kind === "airborne") {
-      const f = journeyPhase.onFlight as FlightReservation;
-      const utcMs = flightDepartureUtcMs(f);
-      return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
-    }
-
-    // Outbound departure at the airport beats a stale or earlier inbound leg (BRI afternoon
-    // departure after a morning FCO→BRI arrival — never show Rome→Bari arrival coach).
-    if (activeFlight) {
-      const justLanded =
-        journeyPhase.kind === "just-landed"
-          ? (journeyPhase.flight as FlightReservation)
-          : null;
-      if (!justLanded || justLanded.id !== activeFlight.f.id) {
-        return activeFlight;
-      }
-    }
-
-    const arrivalRemaining = selectActiveArrivalFlight(reservations, nowMs);
-    if (arrivalRemaining) {
-      const utcMs = flightArrivalUtcMs(arrivalRemaining);
-      return { f: arrivalRemaining, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
-    }
-
-    if (journeyPhase.kind === "just-landed") {
-      const f = journeyPhase.flight as FlightReservation;
-      const utcMs = flightArrivalUtcMs(f);
-      if (!Number.isNaN(utcMs)) {
-        return { f, utcMs };
-      }
-    }
-
-    if (remainingJourneyFlight) {
-      const utcMs = flightDepartureUtcMs(remainingJourneyFlight);
-      return { f: remainingJourneyFlight, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
-    }
-    return previewFlight;
-  }, [
-    journeyPhase,
-    pinnedFlight,
-    activeFlight,
-    previewFlight,
-    remainingJourneyFlight,
-    reservations,
-    nowMs,
-  ]);
 
   const navigatorCoachMode = useMemo(() => {
     if (preferredMode === "arrive") return "arrive";

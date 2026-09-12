@@ -287,7 +287,9 @@ test("G63: airborne BRI→VCE surfaces Venice landing airport, not Bari depart",
   };
   const nowMs = Date.parse("2026-09-12T14:30:00.000Z"); // 16:30 Europe/Rome — in flight
   assert.equal(deriveNavigatorCoachModeForFlight(flight, nowMs), "arrive");
-  assert.equal(selectActiveFlight([flight], nowMs), null);
+  const active = selectActiveFlight([flight], nowMs);
+  assert.ok(active, "G64: in-flight leg stays in active window until arrival");
+  assert.equal(active!.f.id, "flight-bri-vce");
 });
 
 test("FCO arrive mode pins inbound AS180 — AZ1607 FCO→BRI cannot steal", () => {
