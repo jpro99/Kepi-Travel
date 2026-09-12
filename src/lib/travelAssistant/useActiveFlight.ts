@@ -233,6 +233,15 @@ export function deriveNavigatorCoachModeForFlight(
 ): AirportDayCoachMode {
   const depMs = flightDepartureUtcMs(flight);
   const arrMs = flightArrivalUtcMs(flight);
+  // G63 — in flight: surface landing airport (VCE), not origin (BRI).
+  if (
+    !Number.isNaN(depMs) &&
+    !Number.isNaN(arrMs) &&
+    nowMs >= depMs &&
+    nowMs < arrMs
+  ) {
+    return "arrive";
+  }
   if (
     !Number.isNaN(arrMs) &&
     isInArrivalCoachWindow(arrMs, nowMs) &&
@@ -337,6 +346,12 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   const navigatorFlight = useMemo(() => {
     if (pinnedFlight) return pinnedFlight;
 
+    if (journeyPhase.kind === "airborne") {
+      const f = journeyPhase.onFlight as FlightReservation;
+      const utcMs = flightDepartureUtcMs(f);
+      return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+    }
+
     // Outbound departure at the airport beats a stale or earlier inbound leg (BRI afternoon
     // departure after a morning FCO→BRI arrival — never show Rome→Bari arrival coach).
     if (activeFlight) {
@@ -396,10 +411,12 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   }, [navigatorFlight, pinnedFlight, preferredIata, preferredMode, coachMode, nowMs]);
 
   const hotelLabel = useMemo(() => {
-    // Arrive coach only — never feed the first trip hotel (e.g. Polignano) into
-    // a depart surface at ONT as an Uber dropoff.
-    if (journeyPhase.kind !== "just-landed") return null;
-    const f = journeyPhase.flight as FlightReservation;
+    // Arrive / inbound coach only — never feed the first trip hotel into a depart surface.
+    if (journeyPhase.kind !== "just-landed" && journeyPhase.kind !== "airborne") return null;
+    const f =
+      journeyPhase.kind === "airborne"
+        ? (journeyPhase.onFlight as FlightReservation)
+        : (journeyPhase.flight as FlightReservation);
     const dateKey =
       f.flightDate?.slice(0, 10) ??
       f.flightArrivalTime?.slice(0, 10) ??

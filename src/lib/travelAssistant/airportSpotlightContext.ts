@@ -159,7 +159,10 @@ export function resolveAirportSpotlightForHome(input: {
   let flight: MissionControlReservation | null = null;
   let landedMinutesAgo: number | null = null;
 
-  if (input.journeyPhase?.kind === "just-landed") {
+  if (input.journeyPhase?.kind === "airborne") {
+    flight = input.journeyPhase.onFlight as MissionControlReservation;
+    landedMinutesAgo = null;
+  } else if (input.journeyPhase?.kind === "just-landed") {
     flight = input.journeyPhase.flight as MissionControlReservation;
     landedMinutesAgo = input.journeyPhase.landedMinutesAgo;
   } else if (input.nextFlight) {

@@ -254,6 +254,9 @@ Map/Airport coach at a departure airport must show today's **outbound** leg, not
 **G60 — Travel-day train phase must end**  
 On train+flight days, Home/Map must not show train-first copy all day. `areTravelDayTrainsComplete` ends the rail phase when the last leg's stored **ARRIVO** time (+10m buffer) has passed, or instantly when GPS geofences at today's **departure** airport. Then: airport headline, flight leave-by, BRI after-train steps, airport spotlight, and travel-day takeover unlock. Guidance geofence uses `selectActiveFlight` / `selectTravelDayDepartureFlight` — never storage-order stale legs.
 
+**G63 — In flight, show landing airport not origin**  
+When `journeyPhase` is `airborne`, coach mode, map IATA, Home spotlight, and Airport Mode must surface the **arrival** airport (VCE) and tonight's stay — not the departure airport (BRI). `deriveNavigatorCoachModeForFlight` returns `arrive` between scheduled dep and arr; navigator pins `journeyPhase.onFlight`.
+
 **G62 — Where am I never uses tonight's arrival city before you land**  
 Help "where am I" must prefer GPS airport campus, travel-day outbound flight, and `locationStatus` over a same-day check-in stay. Sep 12 BRI→VCE with Venice Airbnb check-in today still answers **Bari** while delayed at BRI — not Venice. Same-day arrival hotels apply only after `just-landed` or GPS at the arrival airport.
 
@@ -1178,6 +1181,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
 | G61 | `src/lib/support/supportChatShell.test.ts` |
 | G62 | `src/lib/support/tripHelpAnswer.test.ts` |
+| G63 | `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
 | D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
 | D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |

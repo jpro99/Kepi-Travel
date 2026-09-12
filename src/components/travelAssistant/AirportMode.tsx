@@ -454,6 +454,11 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     [reservations, now],
   );
   const navigatorFlight = useMemo(() => {
+    if (journeyPhase.kind === "airborne") {
+      const f = journeyPhase.onFlight as FlightReservation;
+      const utcMs = flightDepartureUtcMs(f);
+      return { f, utcMs: Number.isNaN(utcMs) ? now : utcMs };
+    }
     if (activeFlight) {
       const justLanded =
         journeyPhase.kind === "just-landed"
@@ -477,9 +482,12 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     [navigatorFlight, journeyPhase, now],
   );
   const hotelLabel = useMemo(() => {
-    // Arrive coach only — do not Uber to a distant trip hotel while departing.
+    // Arrive / inbound coach only — do not Uber to a distant trip hotel while departing.
     if (coachMode !== "arrive") return null;
-    const f = navigatorFlight?.f;
+    const f =
+      journeyPhase.kind === "airborne"
+        ? (journeyPhase.onFlight as FlightReservation)
+        : navigatorFlight?.f;
     const dateKey =
       f?.flightDate?.slice(0, 10) ??
       f?.flightArrivalTime?.slice(0, 10) ??
@@ -497,7 +505,7 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
       location: hotel.location,
     });
     return label.trim() || null;
-  }, [reservations, coachMode, navigatorFlight]);
+  }, [reservations, coachMode, navigatorFlight, journeyPhase]);
   const navIata =
     coachMode === "arrive"
       ? (navigatorFlight?.f.flightArrivalAirport ?? "")
@@ -669,7 +677,11 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
           }
           flightArrivalTime={arrived.flightArrivalTime ?? null}
           flightTimezone={arrived.timezone ?? null}
-          flightStatusLabel="Landed"
+          flightStatusLabel={
+            journeyPhase.kind === "airborne"
+              ? `In flight · lands ${journeyPhase.landingIn}`
+              : "Landed"
+          }
           flightDelayed={false}
           proximityStatus={proximity.status}
           minutesToDeparture={

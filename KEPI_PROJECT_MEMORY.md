@@ -271,6 +271,10 @@ CapApp-SPM is Swift tools **5.9** + remote Capacitor core only (G22) so Xcode 26
 
 Consumer More, empty Home, and Plan empty states use Lucide + light Apple cards (G21). No emoji section headers, no navy empty-trip cockpit. Gold Talk CTA kept. Confirmations on the trip are untouched.
 
+## Incident 2026-09-12 — In flight still showed Bari airport (G63)
+
+Jeff on BRI→VCE leg: app kept Bari departure map/coach instead of Venice landing plan + tonight's stay. Fix: airborne journeyPhase switches coach to arrival IATA (VCE), navigator uses onFlight, Home takeover shows "When you land" + Directions CTA.
+
 ## Incident 2026-09-12 — Help said Venice while still at BRI (G62)
 
 Jeff asked "where am I" delayed at Bari airport; Help answered Venice because Venice Airbnb check-in was same calendar day. Fix: `answerWhereAmI` prefers GPS airport IATA + travel-day outbound flight before same-day arrival stays; live context now passes `physicalAirportIata` from guidance geofence.

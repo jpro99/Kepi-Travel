@@ -40,11 +40,11 @@ export type DayCoachPathStep = {
   minutes?: number;
 };
 
-/** Jeff-approved: journeyPhase just-landed is the sole trigger (not live status alone). */
+/** In flight or just landed → landing airport coach (G63). Schedule airborne, not live status alone. */
 export function deriveAirportDayCoachMode(
   phase: Pick<JourneyPhase, "kind"> | null | undefined,
 ): AirportDayCoachMode {
-  return phase?.kind === "just-landed" ? "arrive" : "depart";
+  return phase?.kind === "just-landed" || phase?.kind === "airborne" ? "arrive" : "depart";
 }
 
 /** True when dep/arr countries differ; unknown codes -> treat as international (safer checklist). */

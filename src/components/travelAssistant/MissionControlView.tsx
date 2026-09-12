@@ -425,8 +425,13 @@ export function MissionControlView({
   };
 
   const arrivalHotelLabel = useMemo(() => {
-    if (journeyPhase?.kind !== "just-landed") return null;
-    const flight = journeyPhase.flight as MissionControlReservation;
+    let flight: MissionControlReservation | null = null;
+    if (journeyPhase?.kind === "just-landed") {
+      flight = journeyPhase.flight as MissionControlReservation;
+    } else if (journeyPhase?.kind === "airborne") {
+      flight = journeyPhase.onFlight as MissionControlReservation;
+    }
+    if (!flight) return null;
     const dateKey =
       flight.flightDate?.slice(0, 10) ??
       flight.flightArrivalTime?.slice(0, 10) ??
@@ -736,9 +741,49 @@ export function MissionControlView({
             className="mt-6 flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-white text-[17px] font-semibold"
             style={{ color: ctaText }}
           >
-            {walk.next.ctaLabel}
+            {journeyPhase?.kind === "airborne"
+              ? `Landing plan — ${journeyPhase.landingAt}`
+              : walk.next.ctaLabel}
           </button>
         </article>
+
+        {journeyPhase?.kind === "airborne" && travelDayCoach?.arrivalStay ? (
+          <article className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/[0.06]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              When you land
+            </p>
+            <p className="mt-1 text-[20px] font-semibold text-[#1D1D1F]">
+              {travelDayCoach.arrivalStay.propertyName}
+            </p>
+            {travelDayCoach.arrivalStay.address ? (
+              <p className="mt-1 text-[15px] text-[#6E6E73]">{travelDayCoach.arrivalStay.address}</p>
+            ) : travelDayCoach.arrivalStay.city ? (
+              <p className="mt-1 text-[15px] text-[#6E6E73]">{travelDayCoach.arrivalStay.city}</p>
+            ) : null}
+            <p className="mt-2 text-[15px] leading-snug text-[#1D1D1F]">
+              {travelDayCoach.arrivalStay.detail}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {travelDayCoach.arrivalStay.mapsUrl ? (
+                <a
+                  href={travelDayCoach.arrivalStay.mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-[44px] items-center rounded-2xl bg-[#007AFF] px-4 text-[15px] font-semibold text-white"
+                >
+                  Directions to stay
+                </a>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => onReservationTap?.(travelDayCoach.arrivalStay!.reservationId)}
+                className="inline-flex min-h-[44px] items-center rounded-2xl border border-[#007AFF]/30 px-4 text-[15px] font-semibold text-[#007AFF]"
+              >
+                Open stay
+              </button>
+            </div>
+          </article>
+        ) : null}
 
         {checkInHandoff && journeyPhase?.kind !== "airborne" ? (
           <CheckInHandoffCard content={checkInHandoff} />

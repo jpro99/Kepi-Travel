@@ -78,9 +78,9 @@ test("buildAirportHomeSpotlight shows ride to booked hotel on arrival", () => {
   assert.match(next?.title ?? "", /Monopoli/);
 });
 
-test("deriveAirportDayCoachMode uses just-landed only", () => {
+test("deriveAirportDayCoachMode uses just-landed and airborne for landing airport", () => {
   assert.equal(deriveAirportDayCoachMode({ kind: "just-landed" }), "arrive");
-  assert.equal(deriveAirportDayCoachMode({ kind: "airborne" }), "depart");
+  assert.equal(deriveAirportDayCoachMode({ kind: "airborne" }), "arrive");
   assert.equal(deriveAirportDayCoachMode({ kind: "pre-trip" }), "depart");
   assert.equal(deriveAirportDayCoachMode(null), "depart");
 });

@@ -268,6 +268,28 @@ test("G59: same-day morning inbound + afternoon outbound at BRI — outbound win
   assert.equal(deriveNavigatorCoachModeForFlight(pinned!.f, nowMs), "depart");
 });
 
+test("G63: airborne BRI→VCE surfaces Venice landing airport, not Bari depart", () => {
+  const flight: FlightReservation = {
+    id: "flight-bri-vce",
+    type: "flight",
+    title: "ITA Airways",
+    provider: "ITA Airways",
+    confirmationCode: "Z84T4Z",
+    localTime: "2026-09-12 15:20",
+    flightDate: "2026-09-12",
+    flightDepartureTime: "2026-09-12 15:20",
+    flightArrivalTime: "2026-09-12 18:25",
+    flightDepartureAirport: "BRI",
+    flightArrivalAirport: "VCE",
+    flightArrivalTerminal: "1",
+    location: "BRI",
+    timezone: "Europe/Rome",
+  };
+  const nowMs = Date.parse("2026-09-12T14:30:00.000Z"); // 16:30 Europe/Rome — in flight
+  assert.equal(deriveNavigatorCoachModeForFlight(flight, nowMs), "arrive");
+  assert.equal(selectActiveFlight([flight], nowMs), null);
+});
+
 test("FCO arrive mode pins inbound AS180 — AZ1607 FCO→BRI cannot steal", () => {
   const landedAtFco = Date.parse("2026-09-02T13:00:00Z");
   const flights: FlightReservation[] = [
