@@ -25,9 +25,11 @@ import type { TravelProfile } from "@/app/api/travel-profile/route";
 import {
   deriveNavigatorCoachModeForFlight,
   selectActiveFlight,
+  selectNavigatorFlight,
   type FlightReservation,
 } from "@/lib/travelAssistant/useActiveFlight";
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
+import { flightArrivalUtcMs } from "@/lib/travelAssistant/remainingJourneyFlight";
 import {
   isHubConnectionActive,
   resolveHubConnection,
@@ -96,6 +98,7 @@ interface PhaseConfig {
 
 function getLocationPhase(
   deptUtcMs: number,
+  arrUtcMs: number,
   nowMs: number,
   locationStatus: UserAirportStatus,
   hasLoungeAccess: boolean,
@@ -103,6 +106,7 @@ function getLocationPhase(
 ): LocationPhase {
   return resolveAirportLocationPhase({
     departureUtcMs: deptUtcMs,
+    arrivalUtcMs: arrUtcMs,
     nowMs,
     locationStatus,
     hasLoungeAccess,
@@ -453,27 +457,10 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     () => computeJourneyPhase({ reservations, nowMs: now }),
     [reservations, now],
   );
-  const navigatorFlight = useMemo(() => {
-    if (journeyPhase.kind === "airborne") {
-      const f = journeyPhase.onFlight as FlightReservation;
-      const utcMs = flightDepartureUtcMs(f);
-      return { f, utcMs: Number.isNaN(utcMs) ? now : utcMs };
-    }
-    if (activeFlight) {
-      const justLanded =
-        journeyPhase.kind === "just-landed"
-          ? (journeyPhase.flight as FlightReservation)
-          : null;
-      if (!justLanded || justLanded.id !== activeFlight.f.id) {
-        return activeFlight;
-      }
-    }
-    if (journeyPhase.kind === "just-landed") {
-      const f = journeyPhase.flight as FlightReservation;
-      return { f, utcMs: now };
-    }
-    return activeFlight;
-  }, [journeyPhase, activeFlight, now]);
+  const navigatorFlight = useMemo(
+    () => selectNavigatorFlight(reservations, now, journeyPhase),
+    [reservations, now, journeyPhase],
+  );
   const coachMode = useMemo(
     () =>
       navigatorFlight
@@ -704,10 +691,18 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     );
   }
 
-  if (!activeFlight) return null;
+  if (!navigatorFlight) return null;
 
-  const { f, utcMs: deptUtcMs } = activeFlight;
-  const phase = getLocationPhase(deptUtcMs, now, proximity.status, hasLoungeAccess, Boolean(tier));
+  const { f, utcMs: deptUtcMs } = navigatorFlight;
+  const arrUtcMs = flightArrivalUtcMs(f);
+  const phase = getLocationPhase(
+    deptUtcMs,
+    arrUtcMs,
+    now,
+    proximity.status,
+    hasLoungeAccess,
+    Boolean(tier),
+  );
   if (phase === "off") return null;
 
   const config = PHASE_CONFIG[phase];

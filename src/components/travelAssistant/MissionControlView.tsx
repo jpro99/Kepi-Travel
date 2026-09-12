@@ -1111,14 +1111,27 @@ export function MissionControlView({
             {travelDayCoach.flight ? (
               <button
                 type="button"
-                onClick={() => onReservationTap?.(travelDayCoach.flight!.id)}
-                className="w-full rounded-xl bg-white px-3 py-3 text-left"
+                onClick={() => {
+                  onOpenAirportMode?.();
+                  onReservationTap?.(travelDayCoach.flight!.id);
+                }}
+                className="w-full rounded-xl bg-white px-3 py-3 text-left ring-1 ring-[#007AFF]/20"
               >
                 <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
                   Flight today
                 </p>
                 <p className="mt-1 text-[16px] font-semibold leading-snug text-[#1D1D1F]">
                   {formatTravelDayFlightLead(travelDayCoach.flight)}
+                </p>
+                <p className="mt-1 text-[14px] text-[#007AFF]">
+                  {formatFlightStatusTrustLine({
+                    ...(effectiveNextFlight?.id === travelDayCoach.flight.id
+                      ? nextFlightLive
+                      : undefined),
+                    bookedGate: effectiveNextFlight?.flightDepartureGate,
+                    bookedStatus: effectiveNextFlight?.flightStatus,
+                    departureIata: travelDayCoach.flight.flightDepartureAirport,
+                  }) ?? "Tap for gate, terminal map & boarding"}
                 </p>
               </button>
             ) : null}
@@ -1266,9 +1279,8 @@ export function MissionControlView({
         ) : null}
 
         {showTravelOps &&
-        !travelDayLead &&
         effectiveNextFlight &&
-        (zoom === "today" || snap.phase === "departure_day" || stayCoachLead) ? (
+        (zoom === "today" || snap.phase === "departure_day" || stayCoachLead || travelDayLead) ? (
           <button
             type="button"
             onClick={() => onReservationTap?.(effectiveNextFlight!.id)}

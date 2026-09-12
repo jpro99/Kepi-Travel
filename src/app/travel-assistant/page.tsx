@@ -255,6 +255,7 @@ import { resolveStayCityForDay } from "@/lib/travelAssistant/dayPlanLines";
 import { buildFlightLegsFromIntent, defaultEnabledLegIds } from "@/lib/decision/flightLegPlanner";
 import { DesktopTripHomeView } from "@/components/travelAssistant/DesktopTripHomeView";
 import { MobileMapForwardShell } from "@/components/travelAssistant/mobile/MobileMapForwardShell";
+import { FlightDayDock } from "@/components/travelAssistant/FlightDayDock";
 import { computeJourneyPhase, defaultConsumerTabForPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { markLiveMapSessionActive, buildLiveAirportMapUrl } from "@/lib/travelAssistant/liveMapSession";
 import { findPlannableAirportIata } from "@/lib/travelAssistant/mapTabLead";
@@ -11360,6 +11361,24 @@ export default function TravelAssistantPage() {
                 navigateMobilePrimaryTab("book");
               }}
             />
+            {activeTrip && !showTripShellSkeleton ? (
+              <FlightDayDock
+                reservations={consumerReservationsSorted}
+                journeyPhase={mobileJourneyPhase}
+                liveStatus={flightStatusCheckByReservationId}
+                onOpenAirportMode={() => {
+                  markLiveMapSessionActive();
+                  const iata = findPlannableAirportIata(consumerReservationsSorted);
+                  router.push(
+                    buildLiveAirportMapUrl({
+                      tripId: activeTripId,
+                      iata,
+                    }),
+                  );
+                }}
+                onOpenFlight={(id) => openDrawer("reservation", id)}
+              />
+            ) : null}
             <MobileTabBarNav
               activeTab={mobilePrimaryTab}
               onSelectTab={navigateMobilePrimaryTab}
