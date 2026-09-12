@@ -98,7 +98,7 @@ function buildTransportNote(input: {
   if (presentation?.scheduleNote?.trim()) return presentation.scheduleNote.trim();
 
   const firstOption = presentation?.transportOptions?.[0];
-  if (firstOption?.description?.trim()) return firstOption.description.trim();
+  if (firstOption?.detail?.trim()) return firstOption.detail.trim();
 
   return `After you land at ${arrivalAirportLabel(iata)}, open Maps for directions to your stay.`;
 }
@@ -118,7 +118,10 @@ export function buildTravelDayArrivalStay(input: {
     notes: input.hotel.notes,
   });
 
-  const city = stayCityLabel(input.hotel) || formatTravelDayArrivalLabel(input.flight ?? {});
+  const city =
+    stayCityLabel(input.hotel) ||
+    (input.flight ? formatTravelDayArrivalLabel(input.flight) : null) ||
+    "your stay";
   const notesAddress = extractAddressFromText(input.hotel.notes ?? "");
   const locationLine = input.hotel.location?.trim() || "";
   const addressCandidate = notesAddress || contact.address || locationLine;

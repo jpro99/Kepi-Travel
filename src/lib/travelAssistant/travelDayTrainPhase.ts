@@ -98,7 +98,7 @@ export function resolveTrainLegEndUtcMs(train: TrainTicketSourceReservation): nu
 
   const depMs = flightDepartureUtcMs({
     localTime: train.localTime,
-    timezone: train.timezone,
+    timezone: train.timezone ?? undefined,
     flightDepartureTime: train.localTime,
   });
   if (Number.isNaN(depMs)) return Number.NaN;

@@ -216,6 +216,7 @@ test("G59: BRI afternoon departure beats stale Sep 5 FCO→BRI arrival at same a
       flightArrivalTime: "2026-09-12 18:25",
       flightDepartureAirport: "BRI",
       flightArrivalAirport: "VCE",
+      location: "BRI",
       timezone: "Europe/Rome",
     },
   ];
@@ -244,6 +245,7 @@ test("G59: same-day morning inbound + afternoon outbound at BRI — outbound win
       flightDepartureTime: "2026-09-12 08:30",
       flightArrivalTime: "2026-09-12 09:25",
       flightDate: "2026-09-12",
+      location: "FCO",
     },
     {
       id: "flight-bri-vce",
@@ -257,6 +259,7 @@ test("G59: same-day morning inbound + afternoon outbound at BRI — outbound win
       flightArrivalTime: "2026-09-12 18:25",
       flightDepartureAirport: "BRI",
       flightArrivalAirport: "VCE",
+      location: "BRI",
       timezone: "Europe/Rome",
     },
   ];
