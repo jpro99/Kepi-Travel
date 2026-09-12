@@ -271,6 +271,10 @@ CapApp-SPM is Swift tools **5.9** + remote Capacitor core only (G22) so Xcode 26
 
 Consumer More, empty Home, and Plan empty states use Lucide + light Apple cards (G21). No emoji section headers, no navy empty-trip cockpit. Gold Talk CTA kept. Confirmations on the trip are untouched.
 
+## Incident 2026-09-12 — Help said Venice while still at BRI (G62)
+
+Jeff asked "where am I" delayed at Bari airport; Help answered Venice because Venice Airbnb check-in was same calendar day. Fix: `answerWhereAmI` prefers GPS airport IATA + travel-day outbound flight before same-day arrival stays; live context now passes `physicalAirportIata` from guidance geofence.
+
 ## Incident 2026-09-12 — Kepi Help had no type field (G61)
 
 Jeff at BRI with delayed flight could not type questions in Kepi Help — repeated report. Root cause: `SupportChat` panel `z-[120]` sat **under** portaled `MobileTabBar` `z-[99999]`, so the composer was hidden behind the tab bar; travel-day Home also hid `TravelAskPanel` when coach was active. Fix: raise help z-index, hide tab bar while chat open, safe-area footer + autofocus, `TravelDayAskBar` on travel-day Home, never hide Ask on travel days.

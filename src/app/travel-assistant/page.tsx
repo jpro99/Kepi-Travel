@@ -5438,6 +5438,21 @@ export default function TravelAssistantPage() {
     return formatTravelerCaptureFactsLine(captures[0] ?? null);
   }, [activeTripId, travelerCaptureTick, searchParams]);
 
+  const helpLiveAirportIata = useMemo(() => {
+    const nowMs = Date.now();
+    const activeFlight = selectActiveFlight(consumerReservationsSorted, nowMs);
+    const travelDayFlight = selectTravelDayDepartureFlight(consumerReservationsSorted, nowMs);
+    const geofenceFlight = activeFlight?.f ?? travelDayFlight?.f;
+    if (guidanceLocationStatus === "at-airport" || guidanceLocationStatus === "in-terminal") {
+      return (
+        guidanceNearestAirport?.trim().toUpperCase() ||
+        geofenceFlight?.flightDepartureAirport?.trim().toUpperCase() ||
+        null
+      );
+    }
+    return guidanceNearestAirport?.trim().toUpperCase() || null;
+  }, [consumerReservationsSorted, guidanceLocationStatus, guidanceNearestAirport]);
+
   useEffect(() => {
     if (!activeTripId) return;
     const todayKey = travelerTodayKey(Date.now(), travelerTimezoneForHome);
@@ -5447,6 +5462,8 @@ export default function TravelAssistantPage() {
       destination: consumerTripDestination ?? activeTrip?.destination ?? null,
       journeyPhase: journeyPhase.kind,
       locationStatus: guidanceLocationStatus,
+      physicalAirportIata: helpLiveAirportIata,
+      airportIata: helpLiveAirportIata,
       todayKey,
       reservationsJson: JSON.stringify(
         consumerReservationsSorted.map((reservation) => ({
@@ -5480,6 +5497,7 @@ export default function TravelAssistantPage() {
     consumerReservationsSorted,
     consumerTripDestination,
     guidanceLocationStatus,
+    helpLiveAirportIata,
     journeyPhase.kind,
     travelerCaptureFactsLine,
     travelerTimezoneForHome,

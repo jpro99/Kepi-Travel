@@ -87,6 +87,40 @@ test("G55: Sep 11 Help answers next travel day with Lecce→Bari train facts", (
   assert.match(answer!, /BRI|VCE|flight/i);
 });
 
+test("G62: Sep 12 at BRI delayed — where am I is Bari, not Venice check-in", () => {
+  const answer = tryAnswerTripQuestion("Where am I?", {
+    tripName: "Europe 2026",
+    destination: "Italy",
+    todayKey: "2026-09-12",
+    locationStatus: "at-airport",
+    journeyPhase: "pre-trip",
+    physicalAirportIata: "BRI",
+    airportIata: "BRI",
+    reservations: BARI_VENICE_SEP_12,
+  });
+  assert.ok(answer);
+  assert.match(answer!, /Bari/i);
+  assert.match(answer!, /BRI/i);
+  assert.match(answer!, /Venice|VCE/i);
+  assert.doesNotMatch(answer!, /You're in Venice/i);
+});
+
+test("G62: Sep 12 travel day without GPS still does not claim Venice before landing", () => {
+  const answer = tryAnswerTripQuestion("where am I at", {
+    tripName: "Europe 2026",
+    destination: "Italy",
+    todayKey: "2026-09-12",
+    locationStatus: "unknown",
+    journeyPhase: "pre-trip",
+    reservations: BARI_VENICE_SEP_12,
+  });
+  assert.ok(answer);
+  assert.match(answer!, /Bari/i);
+  assert.match(answer!, /Venice/i);
+  assert.match(answer!, /not there yet|after you land/i);
+  assert.doesNotMatch(answer!, /You're in Venice/i);
+});
+
 test("train time question returns departure from booked reservation", () => {
   const answer = tryAnswerTripQuestion("What time is my train?", {
     tripName: "Europe 2026",

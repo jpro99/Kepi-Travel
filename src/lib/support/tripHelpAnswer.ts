@@ -3,6 +3,7 @@
  * platforms, or drive times.
  */
 
+import { resolveAirport } from "@/lib/airports/lookup";
 import { deriveHotelSearchCityFromReservation } from "@/lib/hotels/hotelReservationCity";
 import { buildTripTransportRoute, type TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 
@@ -34,6 +35,11 @@ export interface TripHelpContext {
   todayKey: string;
   locationStatus?: string | null;
   journeyPhase?: string | null;
+  /** GPS-nearest airport campus (e.g. BRI while delayed at Bari). */
+  physicalAirportIata?: string | null;
+  /** Airport mode / coach IATA when at an airport. */
+  airportIata?: string | null;
+  disruptionNote?: string | null;
   reservations: TripHelpReservation[];
 }
 
@@ -95,6 +101,75 @@ function formatLocalDate(dateKey: string): string {
     day: "numeric",
     timeZone: "UTC",
   });
+}
+
+function airportPlaceLabel(iata: string | null | undefined): string {
+  const code = iata?.trim().toUpperCase();
+  if (!code) return "";
+  const resolved = resolveAirport(code);
+  return resolved ? `${resolved.city} (${code})` : code;
+}
+
+function resolveTodayDepartureFlight(
+  reservations: TripHelpReservation[],
+  todayKey: string,
+): TripHelpReservation | null {
+  for (const row of reservations) {
+    if (row.type !== "flight") continue;
+    const day = dateOnly(row.flightDepartureTime ?? row.flightDate ?? row.localTime);
+    if (day === todayKey) return row;
+  }
+  return null;
+}
+
+function campusIata(ctx: TripHelpContext): string | null {
+  return ctx.physicalAirportIata?.trim().toUpperCase() || ctx.airportIata?.trim().toUpperCase() || null;
+}
+
+function hasReachedArrivalCityToday(
+  ctx: TripHelpContext,
+  flight: TripHelpReservation,
+): boolean {
+  if (ctx.journeyPhase === "just-landed") return true;
+  if (ctx.locationStatus === "airborne" || ctx.journeyPhase === "airborne") return false;
+
+  const arrivalIata = flight.flightArrivalAirport?.trim().toUpperCase();
+  if (!arrivalIata) return false;
+
+  const campus = campusIata(ctx);
+  if (campus === arrivalIata) return true;
+
+  const departureIata = flight.flightDepartureAirport?.trim().toUpperCase();
+  if (departureIata && campus === departureIata) return false;
+  if (
+    (ctx.locationStatus === "at-airport" || ctx.locationStatus === "in-terminal") &&
+    departureIata &&
+    campus === departureIata
+  ) {
+    return false;
+  }
+
+  return false;
+}
+
+function isSameDayArrivalStay(
+  stay: TripHelpReservation,
+  flight: TripHelpReservation,
+  todayKey: string,
+): boolean {
+  const checkIn = dateOnly(stay.localTime);
+  const flightDay = dateOnly(flight.flightDepartureTime ?? flight.flightDate ?? flight.localTime);
+  if (checkIn !== todayKey || flightDay !== todayKey) return false;
+
+  const stayCity = stayCityLabel(stay).toLowerCase();
+  const arrival = resolveAirport(flight.flightArrivalAirport ?? "");
+  if (!arrival) return false;
+  const arrivalCity = arrival.city.toLowerCase();
+  return (
+    stayCity.includes(arrivalCity) ||
+    arrivalCity.includes(stayCity) ||
+    (stay.location?.toLowerCase().includes(arrivalCity) ?? false)
+  );
 }
 
 function formatTrainLine(train: TripHelpReservation): string {
@@ -180,7 +255,64 @@ function resolveNextTravelMove(
 }
 
 function answerWhereAmI(ctx: TripHelpContext): string | null {
+  const todayFlight = resolveTodayDepartureFlight(ctx.reservations, ctx.todayKey);
+  const campus = campusIata(ctx);
+
+  if (ctx.locationStatus === "airborne" || ctx.journeyPhase === "airborne") {
+    if (todayFlight) {
+      const from = airportPlaceLabel(todayFlight.flightDepartureAirport);
+      const to = airportPlaceLabel(todayFlight.flightArrivalAirport);
+      const destCity = resolveAirport(todayFlight.flightArrivalAirport ?? "")?.city ?? "your destination";
+      return `You're in flight from ${from} to ${to} — not in ${destCity} yet.`;
+    }
+    return "You're in flight right now — I'll use your landing flight from the trip when you ask about connections.";
+  }
+
+  if (campus) {
+    const place = airportPlaceLabel(campus);
+    const terminalNote = ctx.locationStatus === "in-terminal" ? " inside the terminal" : "";
+    if (todayFlight) {
+      const dep = todayFlight.flightDepartureAirport?.trim().toUpperCase();
+      const arr = todayFlight.flightArrivalAirport?.trim().toUpperCase();
+      if (dep && campus === dep && !hasReachedArrivalCityToday(ctx, todayFlight)) {
+        const dest = airportPlaceLabel(arr);
+        const delayNote = ctx.disruptionNote?.trim() ? ` ${ctx.disruptionNote.trim()}` : "";
+        return `You're at ${place}${terminalNote} — your flight to ${dest} is on today's trip.${delayNote}`;
+      }
+      if (arr && campus === arr) {
+        return `You're at ${place}${terminalNote} — you've reached today's destination airport.`;
+      }
+    }
+    return `You're at ${place} airport${terminalNote}. Open Airport Mode for gate and walk guidance from your booked flight.`;
+  }
+
+  if (todayFlight && !hasReachedArrivalCityToday(ctx, todayFlight)) {
+    const from = airportPlaceLabel(todayFlight.flightDepartureAirport);
+    const to = airportPlaceLabel(todayFlight.flightArrivalAirport);
+    const destCity = resolveAirport(todayFlight.flightArrivalAirport ?? "")?.city ?? "your destination";
+    if (ctx.locationStatus === "at-airport" || ctx.locationStatus === "in-terminal") {
+      return `You're at the airport on today's travel day — ${from} to ${to}. You haven't reached ${destCity} yet.`;
+    }
+    const depTime = todayFlight.flightDepartureTime?.includes(" ")
+      ? todayFlight.flightDepartureTime.split(" ").slice(1).join(" ")
+      : todayFlight.flightDepartureTime ?? "";
+    const timeBit = depTime ? ` Flight departs ${depTime}.` : "";
+    return `You're on today's travel day from ${from} to ${to} — still headed to ${destCity}, not there yet.${timeBit} Tonight's stay in ${destCity} starts after you land.`;
+  }
+
+  if (ctx.journeyPhase === "just-landed" && todayFlight) {
+    return `You just landed at ${airportPlaceLabel(todayFlight.flightArrivalAirport)}. Check tonight's stay on Home or open Airport Mode.`;
+  }
+
   const stay = resolveActiveStay(ctx.reservations, ctx.todayKey);
+  if (stay && todayFlight && isSameDayArrivalStay(stay, todayFlight, ctx.todayKey)) {
+    if (!hasReachedArrivalCityToday(ctx, todayFlight)) {
+      const destCity = stayCityLabel(stay) || resolveAirport(todayFlight.flightArrivalAirport ?? "")?.city;
+      const from = airportPlaceLabel(todayFlight.flightDepartureAirport);
+      return `You're still on today's travel day from ${from} — your ${destCity} check-in is after you land, not where you are right now.`;
+    }
+  }
+
   if (stay) {
     const city = stayCityLabel(stay);
     const lodging = stay.title?.trim();
@@ -194,9 +326,6 @@ function answerWhereAmI(ctx: TripHelpContext): string | null {
 
   if (ctx.locationStatus === "at-airport" || ctx.locationStatus === "in-terminal") {
     return "You're at the airport according to your phone — open Airport Mode for gate and walk guidance from your booked flight.";
-  }
-  if (ctx.journeyPhase?.includes("airborne")) {
-    return "You're in flight right now — I'll use your landing flight from the trip when you ask about connections.";
   }
   if (ctx.destination?.trim()) {
     return `I don't see a stay booked for ${ctx.todayKey}. Your trip destination is ${ctx.destination.trim()} — check Plan for the latest bookings.`;
@@ -307,6 +436,9 @@ export function buildTripHelpContextFromLiveStorage(input: {
       destination?: string;
       locationStatus?: string;
       journeyPhase?: string;
+      physicalAirportIata?: string;
+      airportIata?: string;
+      disruptionNote?: string;
       reservationsJson?: string;
     };
     const reservations = parsed.reservationsJson
@@ -319,6 +451,9 @@ export function buildTripHelpContextFromLiveStorage(input: {
       todayKey: input.todayKey,
       locationStatus: parsed.locationStatus ?? null,
       journeyPhase: parsed.journeyPhase ?? null,
+      physicalAirportIata: parsed.physicalAirportIata ?? null,
+      airportIata: parsed.airportIata ?? null,
+      disruptionNote: parsed.disruptionNote ?? null,
       reservations,
     };
   } catch {
