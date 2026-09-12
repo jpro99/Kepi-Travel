@@ -265,9 +265,9 @@ Departures coach + journey machine only fire when the layout has distinct `check
 ## FLIGHTS LAWS
 
 **F16 — Airborne hero requires verified live status for landing countdown**  
-Schedule-airborne windows may show **In the air** and the booked route (e.g. ONT→SEA) from `journeyPhase` — do not change the remaining-flight picker. **Landing in Xm** is live-radar copy only: require a successful en-route lookup (`active`, `enroute`, `departed`, `approach`, etc.). Lookup failure or unverified live status: detail is **booked scheduled arrival only** — never `liveStatus.error`, never the lookup toast/API string on Home. Missing arrival stays null. Toast may still show the error; the TODAY card must not.
+Schedule-airborne windows may show **In the air** and the booked route (e.g. ONT→SEA) from `journeyPhase` — do not change the remaining-flight picker. **Landing in Xm** is live-radar copy only: require a successful en-route lookup (`active`, `enroute`, `departed`, `approach`, etc.). Lookup failure or unverified live status: detail is **booked scheduled arrival only** — never `liveStatus.error`, never the lookup toast/API string on Home. Scheduled arrival reads stored `flightArrivalTime` (parser `arrivalTime` at import) via `bookedFlightArrival.ts` — never notes/email. Missing arrival stays null. Toast may still show the error; the TODAY card must not.
 
-**Test:** `src/lib/travelAssistant/airborneLiveClaim.test.ts`
+**Test:** `src/lib/travelAssistant/airborneLiveClaim.test.ts`, `src/lib/travelAssistant/bookedFlightArrival.ts`
 
 **F17 — Stranded-at-airport + day-of door honesty (disruption belt)**  
 When booked departure has passed and coarse GPS still shows `at-airport` or `in-terminal` at that IATA (no airborne/live-enroute claim), Home must ask whether the traveler missed the flight or was denied boarding/rebooked — never assume they departed. EC 261 coach cites Regulation (EC) No 261/2004 on EUR-Lex only (Article 7 bands €250/€400/€600); Kepi coaches, does not file. Day-of doors use provenance `SCHEDULED_ITINERARY` | `AIRPORT_FIDS_TEXT` | `ALERT_PUSH_STRING` | `UNVERIFIED` — `UNVERIFIED` hides departure countdown; gate is STRING overlay only; bags/clubs from package Facts or honest unknown + official airport link. Rebook ingest clears stranded when the reservation departure moves forward.
