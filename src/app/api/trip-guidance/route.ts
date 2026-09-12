@@ -151,6 +151,10 @@ locationStatus = "airborne": Traveler is currently on a plane in flight.
 - Suppress ALL packing advice, leave-by times, and "head to airport" instructions.
 - If they have a tight connection on landing, that is the ONLY thing that matters.
 
+locationStatus = "away" AND traveler local time is hours after the last flight arrival:
+- They have already landed and left the airport. NEVER tell them to deplane, leave the plane, clear customs, or grab bags.
+- Focus on where they are now: hotels, restaurants, walking tours, ground transport, next reservation on the trip.
+
 locationStatus = "unknown": No GPS available. Apply normal time-based rules but be gentler — do not assume they need urgent reminders if departure is still hours away.
 
 WHAT YOU NEVER DO:

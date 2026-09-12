@@ -25,6 +25,7 @@ import type { MissionControlReservation } from "@/lib/travelAssistant/tripPhase"
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { firstHotelCityAfter } from "@/lib/travelAssistant/reconcilePlanNoteWithHotels";
 import type { HotelStayLegInput } from "@/lib/travelAssistant/hotelAnchoredStayLegs";
+import { flightArrivalUtcMs, isFlightAirborneAt } from "@/lib/travelAssistant/flightAirborneState";
 
 function toUtcMs(localTime: string, timezone?: string): number {
   const local = localTime?.trim() ?? "";
@@ -130,9 +131,15 @@ export function resolveAirportSpotlightForHome(input: {
   nowMs?: number;
 }): HomeNextAction | null {
   const atAirport = input.atAirport || input.openAirportMode;
+  const journeyKind = input.journeyPhase?.kind;
+  const landedMinutesForGate =
+    journeyKind === "just-landed" ? input.journeyPhase.landedMinutesAgo : null;
+  const postArrivalOnGround =
+    journeyKind === "just-landed" &&
+    ((landedMinutesForGate ?? 0) >= 45 || input.locationStatus === "away");
   const travelDay =
-    input.journeyPhase?.kind === "just-landed" ||
-    input.journeyPhase?.kind === "airborne" ||
+    (journeyKind === "just-landed" && !postArrivalOnGround) ||
+    (journeyKind === "airborne" && input.locationStatus === "airborne") ||
     atAirport;
   if (!travelDay) return null;
 
@@ -160,8 +167,17 @@ export function resolveAirportSpotlightForHome(input: {
   let landedMinutesAgo: number | null = null;
 
   if (input.journeyPhase?.kind === "airborne") {
-    flight = input.journeyPhase.onFlight as MissionControlReservation;
-    landedMinutesAgo = null;
+    const airborneFlight = input.journeyPhase.onFlight as MissionControlReservation;
+    if (isFlightAirborneAt(airborneFlight, nowMs)) {
+      flight = airborneFlight;
+      landedMinutesAgo = null;
+    } else {
+      flight = airborneFlight;
+      const arrMs = flightArrivalUtcMs(airborneFlight);
+      landedMinutesAgo = Number.isFinite(arrMs)
+        ? Math.max(0, Math.round((nowMs - arrMs) / 60_000))
+        : 60;
+    }
   } else if (input.journeyPhase?.kind === "just-landed") {
     flight = input.journeyPhase.flight as MissionControlReservation;
     landedMinutesAgo = input.journeyPhase.landedMinutesAgo;

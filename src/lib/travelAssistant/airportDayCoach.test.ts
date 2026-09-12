@@ -51,6 +51,25 @@ test("resolveArrivalSpotlightIndex advances after landing time", () => {
   );
 });
 
+test("resolveArrivalSpotlightIndex skips deplane when away in city hours after landing", () => {
+  const steps = buildArrivalDayCoachPath({
+    iata: "BRI",
+    departureIata: "FCO",
+    flightNumber: "AZ 123",
+    hotelLabel: "Lecce",
+  });
+  const rideIdx = steps.findIndex((s) => s.id === "ride");
+  assert.ok(rideIdx >= 0);
+  assert.equal(
+    resolveArrivalSpotlightIndex({
+      steps,
+      landedMinutesAgo: 300,
+      locationStatus: "away",
+    }),
+    rideIdx,
+  );
+});
+
 test("resolveDepartSpotlightIndex maps security phase to security step", () => {
   const steps = [
     { id: "check-in", icon: "🧳", text: "Check in" },

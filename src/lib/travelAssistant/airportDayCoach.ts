@@ -140,20 +140,39 @@ export function resolveArrivalSpotlightIndex(input: {
   const landed = input.landedMinutesAgo ?? 0;
   const atAirport =
     input.locationStatus === "at-airport" || input.locationStatus === "in-terminal";
-
+  const awayFromAirport = input.locationStatus === "away";
   const rideIdx = idx("ride");
-  if (rideIdx >= 0 && atAirport && landed >= 25) return rideIdx;
-
   const postBagsIdx = idx("customs") >= 0 ? idx("customs") : idx("exit");
-  if (postBagsIdx >= 0 && landed >= 15 && atAirport) return postBagsIdx;
+
+  // Landside / in city — deplaning and baggage are long done.
+  if (rideIdx >= 0 && ((awayFromAirport && landed >= 20) || landed >= 45)) {
+    return rideIdx;
+  }
+
+  if (postBagsIdx >= 0 && landed >= 15 && (atAirport || awayFromAirport)) {
+    return postBagsIdx;
+  }
 
   const bagsIdx = idx("bags");
-  if (bagsIdx >= 0 && (input.hasLiveBaggage || (atAirport && landed >= 5))) return bagsIdx;
+  if (
+    bagsIdx >= 0 &&
+    (input.hasLiveBaggage || (atAirport && landed >= 5) || (awayFromAirport && landed >= 10))
+  ) {
+    return bagsIdx;
+  }
 
   const immIdx = idx("immigration");
   if (immIdx >= 0 && landed >= 3) return immIdx;
 
-  return 0;
+  // Only show deplane while actually in flight or within minutes of touchdown.
+  if (landed <= 0 && input.locationStatus === "airborne") return 0;
+
+  if (landed >= 3 && awayFromAirport) {
+    if (rideIdx >= 0) return rideIdx;
+    if (postBagsIdx >= 0) return postBagsIdx;
+  }
+
+  return landed <= 2 ? 0 : postBagsIdx >= 0 ? postBagsIdx : 0;
 }
 
 /** Depart spotlight from LocationPhase + tagged guide steps (unifies AirportMode). */

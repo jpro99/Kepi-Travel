@@ -3,6 +3,8 @@
  * Uses UTC-correct flight times — never browser-local date heuristics alone.
  */
 
+import { isFlightAirborneAt } from "./flightAirborneState";
+
 import {
   canonicalFlightDepartureLocalTime,
 } from "@/lib/travelAssistant/tripWindow";
@@ -21,6 +23,7 @@ export interface JourneyReservation {
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
   flightNumber?: string;
+  flightStatus?: string;
   checkOutDate?: string;
 }
 
@@ -294,7 +297,7 @@ export function computeJourneyPhase(args: {
     // leaving for ONT (or any origin).
     if (nowMs < depMs) continue;
 
-    if (nowMs >= depMs && nowMs < arrMs) {
+    if (isFlightAirborneAt(flight, nowMs)) {
       const minsLeft = Math.max(0, Math.round((arrMs - nowMs) / MS_PER_MIN));
       return {
         kind: "airborne",
@@ -304,7 +307,7 @@ export function computeJourneyPhase(args: {
       };
     }
 
-    if (nowMs >= arrMs && nowMs < arrMs + POST_ARRIVAL_ACTIVE_MS) {
+    if (nowMs >= depMs && nowMs < arrMs + POST_ARRIVAL_ACTIVE_MS) {
       if (
         hasSupersedingDepartureFromAirport(
           flights,

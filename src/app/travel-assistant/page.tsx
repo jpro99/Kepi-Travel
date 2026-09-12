@@ -339,6 +339,7 @@ import { Logo } from "@/components/ui/Logo";
 import { JourneyFlowPanel } from "./components/JourneyFlowPanel";
 import { TravelAssistantTopControls } from "./components/TravelAssistantTopControls";
 import { getAirportProximity } from "@/lib/travelAssistant/airportGeo";
+import { resolveTravelerLocationStatus } from "@/lib/travelAssistant/flightAirborneState";
 import { ConsumerDesktopTabBar } from "@/components/travelAssistant/ConsumerDesktopTabBar";
 import {
   normalizeConsumerTabParam,
@@ -4658,33 +4659,31 @@ export default function TravelAssistantPage() {
 
   // Derive location status for AI guidance — must be after consumerReservationsSorted
   const guidanceLocationStatus = useMemo((): "away" | "at-airport" | "in-terminal" | "airborne" | "unknown" => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     const nowMs = Date.now();
-
-    // Check if currently airborne: a flight departed in the last 14 hours and hasn't arrived yet
-    // This is the most important case — "away" from all airports mid-ocean ≠ "away from airport"
-    const airborne = consumerReservationsSorted.find(r => {
-      if (r.type !== "flight") return false;
-      const rr = r as unknown as Record<string, string>;
-      const depLocal = rr.flightDepartureTime ?? rr.localTime ?? "";
-      const arrLocal = rr.flightArrivalTime ?? "";
-      const depMs = depLocal ? Date.parse(depLocal.replace("T"," ").slice(0, 16).replace(" ","T")) : NaN;
-      const arrMs = arrLocal ? Date.parse(arrLocal.replace("T"," ").slice(0, 16).replace(" ","T")) : NaN;
-      // If departed (depMs in past) and either not yet arrived or arrival unknown but < 14h since dep
-      const departed = !isNaN(depMs) && nowMs > depMs;
-      const notYetArrived = isNaN(arrMs) ? (nowMs - depMs < 14 * 3600_000) : nowMs < arrMs + 30 * 60_000;
-      return departed && notYetArrived;
-    });
-    if (airborne) return "airborne";
-
-    // GPS-based airport proximity — same selectors as Map/Airport Mode (never stale FCO→BRI).
+    const flights = consumerReservationsSorted.filter((r) => r.type === "flight");
     const activeFlight = selectActiveFlight(consumerReservationsSorted, nowMs);
     const travelDayFlight = selectTravelDayDepartureFlight(consumerReservationsSorted, nowMs);
     const geofenceFlight = activeFlight?.f ?? travelDayFlight?.f;
     const deptIata = geofenceFlight?.flightDepartureAirport;
-    const proximity = getAirportProximity(guidanceUserLat, guidanceUserLon, deptIata);
-    return proximity.status === "unknown" ? "unknown" : proximity.status;
-  }, [guidanceUserLat, guidanceUserLon, consumerReservationsSorted]);
+
+    return resolveTravelerLocationStatus({
+      flights,
+      nowMs,
+      userLat: guidanceUserLat,
+      userLon: guidanceUserLon,
+      departureIata: deptIata,
+      liveStatusById: flightStatusCheckByReservationId,
+      getProximity: (lat, lon, iata) => {
+        const prox = getAirportProximity(lat, lon, iata);
+        return { status: prox.status, distanceKm: prox.distanceKm };
+      },
+    });
+  }, [
+    guidanceUserLat,
+    guidanceUserLon,
+    consumerReservationsSorted,
+    flightStatusCheckByReservationId,
+  ]);
 
   const guidanceNearestAirport = useMemo(() => {
     const proximity = getAirportProximity(guidanceUserLat, guidanceUserLon, undefined);
