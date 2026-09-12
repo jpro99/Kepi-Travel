@@ -245,6 +245,9 @@ Rights coach links EUR-Lex 261/2004, Your Europe, and the EU NEB list; July 2026
 **G55 — Home travel day: train-first, then airport, stored tickets lead**  
 On a calendar travel day with booked train + flight (e.g. Lecce→Bari Centrale then BRI→VCE), Home replaces the generic okay/next/leave form and blocks misleading airport-only takeover until the train leg is done. Surfaces stored train PDF/email first, honest Bari Centrale→BRI transfer cue (no invented BRI gates/platforms), flight card + leave-by from booked times. Eve-before previews tomorrow's move via stay coach. `detectMissionPhase` uses traveler timezone for calendar today.
 
+**G58 — Travel day must show where you're sleeping tonight**  
+On any travel day with a booked check-in (hotel/Airbnb) the same calendar day, Home surfaces **Tonight** above the fold: property name, stored address (or city when address missing), check-in time only when on the confirmation, Maps directions link, and an honest post-landing cue (airport transport when verified, else “open Maps after you land”). Never show only the departure city — the arrival stay is part of the travel-day walkthrough.
+
 **Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`
 
 
@@ -1116,6 +1119,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G53 | `src/lib/travelAssistant/gateStringPath.test.ts`, `src/lib/travelAssistant/dayOfStatusChrome.test.ts`, `src/lib/travelAssistant/softTripRefresh.test.ts` |
 | G54 | `src/lib/travelAssistant/ec261Coach.test.ts` |
 | G55 | `src/lib/travelAssistant/homeTravelDayCoach.test.ts`, `src/lib/support/tripHelpAnswer.test.ts` |
+| G58 | `src/lib/travelAssistant/travelDayArrivalStay.test.ts`, `src/lib/travelAssistant/homeTravelDayCoach.test.ts` |
 | M39 | `src/lib/travelAssistant/flightSort.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | M20 | `src/lib/family/nativeLocationToken.test.ts`, `src/lib/family/decideFamilyLocationWrite.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | I8 | `src/lib/travelAssistant/tripLegColors.test.ts` |

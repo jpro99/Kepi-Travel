@@ -1067,6 +1067,53 @@ export function MissionControlView({
                 </p>
               </button>
             ) : null}
+            {travelDayCoach.arrivalStay ? (
+              <article className="rounded-xl border border-[#007AFF]/15 bg-white px-3 py-3 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#007AFF]">
+                  Tonight
+                </p>
+                <p className="mt-1 text-[17px] font-semibold text-[#1D1D1F]">
+                  {travelDayCoach.arrivalStay.propertyName}
+                </p>
+                {travelDayCoach.arrivalStay.address ? (
+                  <p className="mt-0.5 text-[14px] leading-relaxed text-[#6E6E73]">
+                    {travelDayCoach.arrivalStay.address}
+                  </p>
+                ) : travelDayCoach.arrivalStay.city ? (
+                  <p className="mt-0.5 text-[14px] text-[#6E6E73]">{travelDayCoach.arrivalStay.city}</p>
+                ) : null}
+                <p className="mt-2 text-[14px] leading-relaxed text-[#6E6E73]">
+                  {travelDayCoach.arrivalStay.detail}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-4">
+                  {travelDayCoach.arrivalStay.mapsUrl ? (
+                    <a
+                      href={travelDayCoach.arrivalStay.mapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[14px] font-semibold text-[#007AFF]"
+                    >
+                      Get directions
+                    </a>
+                  ) : null}
+                  {travelDayCoach.arrivalStay.phoneTelHref ? (
+                    <a
+                      href={travelDayCoach.arrivalStay.phoneTelHref}
+                      className="text-[14px] font-semibold text-[#007AFF]"
+                    >
+                      Call property
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onReservationTap?.(travelDayCoach.arrivalStay!.reservationId)}
+                    className="text-[14px] font-semibold text-[#007AFF]"
+                  >
+                    View stay
+                  </button>
+                </div>
+              </article>
+            ) : null}
           </div>
         ) : null}
 
@@ -1375,7 +1422,8 @@ export function MissionControlView({
 
       {snap.tonightHotel &&
       (snap.phase === "at_destination" || snap.phase === "departure_day") &&
-      !stayCoachLead ? (
+      !stayCoachLead &&
+      !travelDayCoach?.arrivalStay ? (
         <article className="rounded-2xl bg-[#F5F5F7] p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
             {snap.phase === "departure_day" ? "Tonight" : "Where you are"}

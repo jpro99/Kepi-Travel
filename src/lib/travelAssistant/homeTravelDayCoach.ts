@@ -27,6 +27,12 @@ import {
   type TrainTicketSourceReservation,
 } from "@/lib/travelAssistant/trainTicketHandoff";
 import { trainReservationsOnDayExpanded } from "@/lib/travelAssistant/travelDayTrainExpand";
+import {
+  resolveTravelDayArrivalStay,
+  type TravelDayArrivalStay,
+} from "@/lib/travelAssistant/travelDayArrivalStay";
+
+export type { TravelDayArrivalStay };
 
 export interface HomeTravelDayFlight {
   id: string;
@@ -60,6 +66,8 @@ export interface HomeTravelDayCoach {
   /** BRI KW→tunnel→arrivals→isole — promoted above fold when Reg 91312 / airport rail present. */
   briAirportCoachSteps: TravelDayWalkthroughStep[];
   walkthroughSteps: TravelDayWalkthroughStep[];
+  /** G58 — booked check-in tonight (Airbnb/hotel) + honest get-there cue after landing. */
+  arrivalStay: TravelDayArrivalStay | null;
 }
 
 function formatShortDayLabel(dateKey: string, timezone?: string | null): string {
@@ -249,6 +257,7 @@ export function buildTravelDayWalkthroughSteps(input: {
   trains: TrainTicketSourceReservation[];
   trainHandoffs: TrainTicketHandoffContent[];
   flight: HomeTravelDayFlight | null;
+  arrivalStay?: TravelDayArrivalStay | null;
 }): TravelDayWalkthroughStep[] {
   const steps: TravelDayWalkthroughStep[] = [];
   const flightFromBri = (input.flight?.flightDepartureAirport?.trim().toUpperCase() ?? "") === "BRI";
@@ -323,6 +332,14 @@ export function buildTravelDayWalkthroughSteps(input: {
     });
   }
 
+  if (input.arrivalStay) {
+    steps.push({
+      id: "tonight-stay",
+      title: input.arrivalStay.headline,
+      detail: input.arrivalStay.detail,
+    });
+  }
+
   return steps;
 }
 
@@ -380,6 +397,8 @@ export function buildHomeTravelDayCoach(input: {
     ? composeTravelDayFlightView(flightPick)
     : null;
 
+  const arrivalStay = resolveTravelDayArrivalStay(input.reservations, input.dateKey, flight);
+
   const hasTrainBeforeFlight = Boolean(primaryTrain && flight);
   const airportTransferHint = buildBriAirportTransferHint({
     trainArrivesBari: primaryTrain ? trainEndsAtBari(primaryTrain) : false,
@@ -392,6 +411,11 @@ export function buildHomeTravelDayCoach(input: {
   const leadParts: string[] = [];
   for (const train of trains) leadParts.push(trainHeadline(train));
   if (flight) leadParts.push(flightHeadline(flight));
+  if (arrivalStay) {
+    leadParts.push(
+      `Tonight: ${arrivalStay.propertyName}${arrivalStay.city ? ` · ${arrivalStay.city}` : ""}`,
+    );
+  }
   const leadDetail = leadParts.join(" · ") || "Your booked travel for today.";
 
   const leaveCue = (() => {
@@ -409,6 +433,7 @@ export function buildHomeTravelDayCoach(input: {
     trains,
     trainHandoffs,
     flight,
+    arrivalStay,
   });
   const briAirportCoachSteps = allWalkthroughSteps.filter(isBriAirportCoachStep);
   const walkthroughSteps = allWalkthroughSteps.filter((step) => !isBriAirportCoachStep(step));
@@ -425,6 +450,7 @@ export function buildHomeTravelDayCoach(input: {
     hasTrainBeforeFlight,
     briAirportCoachSteps,
     walkthroughSteps,
+    arrivalStay,
   };
 }
 

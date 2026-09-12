@@ -117,6 +117,23 @@ test("G55: Sep 12 travel day coach surfaces both train legs then BRI flight", ()
   assert.doesNotMatch(walkText, /ITA door/i);
 });
 
+test("G58: travel day coach surfaces tonight Airbnb with get-there cue", () => {
+  const coach = buildHomeTravelDayCoach({
+    reservations: BARI_VENICE_SEP_12,
+    dateKey: "2026-09-12",
+    timezone: "Europe/Rome",
+    tripId: BARI_VENICE_TRIP_ID,
+  });
+  assert.ok(coach?.arrivalStay);
+  assert.match(coach!.arrivalStay!.propertyName, /Venice Airbnb/i);
+  assert.match(coach!.leadDetail, /Tonight: Venice Airbnb/i);
+  assert.match(coach!.arrivalStay!.detail, /Venice/i);
+  assert.ok(coach!.arrivalStay!.mapsUrl?.includes("google.com/maps"));
+  const tonightStep = coach!.walkthroughSteps.find((step) => step.id === "tonight-stay");
+  assert.ok(tonightStep);
+  assert.match(tonightStep!.title, /Tonight/i);
+});
+
 test("G55: walkthrough order is 8312 → Centrale → 91312 → BRI coach (4) → ITA flight", () => {
   const coach = buildHomeTravelDayCoach({
     reservations: BARI_VENICE_SEP_12,
@@ -143,7 +160,9 @@ test("G55: walkthrough order is 8312 → Centrale → 91312 → BRI coach (4) �
   assert.ok(idxArrivals > idxTunnel);
   assert.ok(idxCheckIn > idxArrivals);
   assert.ok(idxFlight > idx91312);
-  assert.equal(idxFlight, coach!.walkthroughSteps.length - 1);
+  const idxTonight = itineraryTitles.findIndex((title) => /Tonight/i.test(title));
+  assert.ok(idxTonight > idxFlight);
+  assert.equal(idxTonight, coach!.walkthroughSteps.length - 1);
 });
 
 test("buildTravelDayWalkthroughSteps lists both passengers on train legs", () => {
