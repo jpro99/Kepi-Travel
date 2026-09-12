@@ -257,6 +257,9 @@ On train+flight days, Home/Map must not show train-first copy all day. `areTrave
 **G63 — In flight, show landing airport not origin**  
 When `journeyPhase` is `airborne`, coach mode, map IATA, Home spotlight, and Airport Mode must surface the **arrival** airport (VCE) and tonight's stay — not the departure airport (BRI). `deriveNavigatorCoachModeForFlight` returns `arrive` between scheduled dep and arr; navigator pins `journeyPhase.onFlight`.
 
+**G65 — Hub connection beats “landing plan” on the ground**  
+During a same-airport connection, Home must lead with **gate + connection steps** (deplane → immigration → security → gate), not “In the air / Landing plan — VCE” while the traveler is still racing for the outbound gate. `resolveHomeHubConnectionSurface` + connection step list on takeover; tourism Ask Kepi hidden at airports.
+
 **G64 — Flight dock never hides on active travel day**  
 From 24h before departure through post-landing coach, travelers always see today's flight (#, route, gate) in a pinned one-tap dock above the tab bar — survives refresh and travel-day coach swaps. `selectActiveFlight` stays live through scheduled arrival; Airport Mode uses `selectNavigatorFlight`, not the 60m post-departure cliff alone.
 
@@ -1186,6 +1189,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G62 | `src/lib/support/tripHelpAnswer.test.ts` |
 | G63 | `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
 | G64 | `src/lib/travelAssistant/flightDayDock.test.ts`, `src/lib/travelAssistant/airportLocationPhase.test.ts` |
+| G65 | `src/lib/travelAssistant/hubConnectionHome.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
 | D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
 | D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |

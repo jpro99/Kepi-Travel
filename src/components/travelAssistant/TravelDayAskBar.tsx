@@ -1,10 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
 import { useTravelAskChat } from "@/components/support/useTravelAskChat";
 import { openSupportChat } from "@/components/support/SupportChat";
+import { formatClientSupportContext } from "@/lib/support/clientSupportContext";
 
 interface TravelDayAskBarProps {
   destination?: string | null;
+  airportIata?: string | null;
+  connectionHeadline?: string | null;
 }
 
 const TRAVEL_DAY_PROMPTS = [
@@ -13,15 +17,57 @@ const TRAVEL_DAY_PROMPTS = [
   "What are my EU passenger rights?",
 ] as const;
 
+function buildTravelDayHelpContext(input: {
+  destination?: string | null;
+  airportIata?: string | null;
+  connectionHeadline?: string | null;
+}): string {
+  const lines = [
+    "Travel day help context (use for connections, gates, delays — NOT tourism):",
+  ];
+  const airport = input.airportIata?.trim().toUpperCase();
+  if (airport) {
+    lines.push(`- Traveler is at or heading to airport: ${airport}`);
+    lines.push("- Prioritize gate, connection steps, and departure time — not restaurants or walking tours.");
+  }
+  if (input.connectionHeadline?.trim()) {
+    lines.push(`- Current connection focus: ${input.connectionHeadline.trim()}`);
+  }
+  if (input.destination?.trim() && !airport) {
+    lines.push(`- Trip region: ${input.destination.trim()}`);
+  }
+  lines.push(
+    "- If the traveler says they already landed or are at the gate, believe them over stale journey phase.",
+  );
+  return lines.join("\n");
+}
+
 /**
  * G61 — Travel-day help must stay typeable on Home (not hidden behind coach cards or tab bar).
+ * G65 — At an airport, never steer to Polignano tourism; connection + gate first.
  */
-export function TravelDayAskBar({ destination }: TravelDayAskBarProps) {
-  const place = destination?.trim() || "your trip";
-  const welcomeMessage = `Travel day help for ${place}. Ask about delays, connections, trains, or what to do next.`;
+export function TravelDayAskBar({
+  destination,
+  airportIata,
+  connectionHeadline,
+}: TravelDayAskBarProps) {
+  const airport = airportIata?.trim().toUpperCase() ?? null;
+  const tripContext = useMemo(
+    () =>
+      [buildTravelDayHelpContext({ destination, airportIata, connectionHeadline }), formatClientSupportContext()]
+        .filter(Boolean)
+        .join("\n\n"),
+    [destination, airportIata, connectionHeadline],
+  );
+
+  const welcomeMessage = airport
+    ? `You're at ${airport}. Ask about your gate, connection, delays, or what to do in the next few minutes.`
+    : destination?.trim()
+      ? `Travel day help near ${destination.trim()}. Ask about delays, connections, trains, or what to do next.`
+      : "Travel day help — ask about delays, connections, or what to do next.";
 
   const { messages, inputValue, setInputValue, isSending, error, sendMessage, scrollRef } =
-    useTravelAskChat({ welcomeMessage });
+    useTravelAskChat({ tripContext, welcomeMessage });
 
   const hasThread = messages.length > 1;
 
@@ -38,6 +84,11 @@ export function TravelDayAskBar({ destination }: TravelDayAskBarProps) {
           <h2 className="mt-1 text-xl font-bold text-slate-950 dark:text-white">
             Ask anything — delays, connections, what&apos;s next
           </h2>
+          {airport ? (
+            <p className="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">
+              At {airport} airport
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -87,35 +138,32 @@ export function TravelDayAskBar({ destination }: TravelDayAskBarProps) {
         </div>
       )}
 
-      <footer className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
-        {error ? <p className="mb-2 text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
-        <div className="flex gap-2">
-          <input
-            value={inputValue}
-            onChange={(event) => setInputValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void sendMessage();
-              }
-            }}
-            placeholder="Type your question…"
-            enterKeyHint="send"
-            autoComplete="off"
-            className="min-h-[48px] flex-1 rounded-2xl border border-slate-300 bg-white px-4 text-[17px] text-slate-900 outline-none ring-[#007AFF] focus-visible:ring-2 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
-          />
-          <button
-            type="button"
-            disabled={isSending || !inputValue.trim()}
-            onClick={() => {
+      <div className="mt-3 flex gap-2">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(event) => setInputValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
               void sendMessage();
-            }}
-            className="min-h-[48px] shrink-0 rounded-2xl bg-[#007AFF] px-4 text-sm font-bold text-white disabled:opacity-50"
-          >
-            {isSending ? "…" : "Send"}
-          </button>
-        </div>
-      </footer>
+            }
+          }}
+          placeholder="Type your question…"
+          disabled={isSending}
+          className="min-h-[48px] flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-[17px] text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          disabled={isSending || !inputValue.trim()}
+          onClick={() => void sendMessage()}
+          className="min-h-[48px] shrink-0 rounded-2xl bg-[#007AFF] px-4 text-[15px] font-semibold text-white disabled:opacity-40"
+        >
+          Send
+        </button>
+      </div>
+      {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
     </section>
   );
 }

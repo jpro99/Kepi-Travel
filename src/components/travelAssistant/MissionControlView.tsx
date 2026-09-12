@@ -69,6 +69,12 @@ import {
   type TrainTicketSourceReservation,
 } from "@/lib/travelAssistant/trainTicketHandoff";
 import { TravelDayAskBar } from "@/components/travelAssistant/TravelDayAskBar";
+import {
+  formatHubConnectionHeroDetail,
+  formatHubConnectionHeroTitle,
+  hubConnectionEyebrow,
+  resolveHomeHubConnectionSurface,
+} from "@/lib/travelAssistant/hubConnectionHome";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -97,6 +103,8 @@ export interface MissionControlViewProps {
   journeyPhase?: JourneyPhase;
   checkInHandoff?: CheckInHandoffContent | null;
   locationStatus?: "away" | "at-airport" | "in-terminal" | "airborne" | "unknown";
+  /** GPS-nearest airport IATA — drives hub connection coach (G65). */
+  nearestAirport?: string | null;
   /** Soft Free→Pro clarity (I41). Hidden when Pro/lifetime. */
   showFreePlanNudge?: boolean;
   onSeeProPlans?: () => void;
@@ -188,6 +196,7 @@ export function MissionControlView({
   journeyPhase,
   checkInHandoff = null,
   locationStatus = "unknown",
+  nearestAirport = null,
   showFreePlanNudge = false,
   onSeeProPlans,
   missingPriceCount = 0,
@@ -660,6 +669,20 @@ export function MissionControlView({
       ? `${takeoverFlight.flightDepartureAirport ?? ""} → ${takeoverFlight.flightArrivalAirport ?? ""}`
       : snap.identityLabel;
 
+    const outboundForGate =
+      takeoverFlight?.id ??
+      (journeyPhase?.kind === "airborne" ? journeyPhase.onFlight.id : null);
+    const hubConnection = resolveHomeHubConnectionSurface({
+      reservations: reservations as TransportRouteReservation[],
+      journeyPhase,
+      locationStatus,
+      nearestAirport,
+      liveDepartureGate: outboundForGate
+        ? liveStatus?.[outboundForGate]?.departureGate ?? gate
+        : gate,
+      nowMs: Date.now(),
+    });
+
     let eyebrow = snap.phase === "departure_day" ? "Today" : "Travel day";
     let title = (travelDayCoach?.leaveCue ?? snap.leaveByHint) || "You're traveling today";
     let detail: string | null =
@@ -667,8 +690,17 @@ export function MissionControlView({
         ? formatTravelDayFlightLabel(takeoverFlight)
         : routeLabel;
     let tone: "blue" | "green" = "blue";
+    let connectionCta = walk.next.ctaLabel;
 
-    if (journeyPhase?.kind === "airborne") {
+    if (hubConnection?.onGroundAtHub) {
+      eyebrow = hubConnectionEyebrow(hubConnection);
+      title = formatHubConnectionHeroTitle(hubConnection);
+      detail = formatHubConnectionHeroDetail(hubConnection);
+      connectionCta = `Gate map — ${hubConnection.hubIata}`;
+      if (hubConnection.playbook.risk === "tight" || hubConnection.playbook.risk === "impossible") {
+        tone = "blue";
+      }
+    } else if (journeyPhase?.kind === "airborne") {
       const airborneLive = liveStatus?.[journeyPhase.onFlight.id];
       const airborneCopy = resolveAirborneHeroCopy(journeyPhase, airborneLive);
       eyebrow = airborneCopy.eyebrow;
@@ -730,7 +762,9 @@ export function MissionControlView({
           <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/70">{eyebrow}</p>
           <h2 className="mt-2 text-[28px] font-semibold tracking-tight leading-tight">{title}</h2>
           {detail ? <p className="mt-2 text-[17px] text-white/85">{detail}</p> : null}
-          {!travelDayLead && connectionCalm.kind === "conflict" && connectionCalm.line ? (
+          {(hubConnection?.onGroundAtHub ||
+            connectionCalm.kind === "conflict") &&
+          connectionCalm.line ? (
             <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-[14px] font-medium text-white">
               {connectionCalm.line}
             </p>
@@ -741,11 +775,53 @@ export function MissionControlView({
             className="mt-6 flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-white text-[17px] font-semibold"
             style={{ color: ctaText }}
           >
-            {journeyPhase?.kind === "airborne"
-              ? `Landing plan — ${journeyPhase.landingAt}`
-              : walk.next.ctaLabel}
+            {hubConnection?.onGroundAtHub
+              ? connectionCta
+              : journeyPhase?.kind === "airborne"
+                ? `Landing plan — ${journeyPhase.landingAt}`
+                : walk.next.ctaLabel}
           </button>
         </article>
+
+        {hubConnection?.onGroundAtHub ? (
+          <article
+            className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/[0.06]"
+            data-testid="hub-connection-steps"
+          >
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6E6E73]">
+              Connection steps · {hubConnection.hubIata}
+            </p>
+            <ol className="mt-3 space-y-3">
+              {hubConnection.playbook.steps.map((step, index) => {
+                const active = index === hubConnection.currentStepIndex;
+                return (
+                  <li
+                    key={step.id}
+                    className={`flex gap-3 rounded-2xl px-3 py-3 ${
+                      active ? "bg-[#007AFF]/10 ring-1 ring-[#007AFF]/25" : "bg-[#F5F5F7]"
+                    }`}
+                  >
+                    <span className="text-xl shrink-0" aria-hidden="true">{step.icon}</span>
+                    <div className="min-w-0">
+                      <p
+                        className={`text-[16px] font-semibold leading-snug ${
+                          active ? "text-[#007AFF]" : "text-[#1D1D1F]"
+                        }`}
+                      >
+                        {step.text}
+                      </p>
+                      {step.detail ? (
+                        <p className="mt-0.5 text-[14px] leading-relaxed text-[#6E6E73]">
+                          {step.detail}
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </article>
+        ) : null}
 
         {journeyPhase?.kind === "airborne" && travelDayCoach?.arrivalStay ? (
           <article className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/[0.06]">
@@ -797,7 +873,11 @@ export function MissionControlView({
           Trip overview
         </button>
 
-        <TravelDayAskBar destination={destination} />
+        <TravelDayAskBar
+          destination={destination}
+          airportIata={nearestAirport ?? hubConnection?.hubIata ?? takeoverFlight?.flightDepartureAirport}
+          connectionHeadline={hubConnection?.onGroundAtHub ? title : null}
+        />
       </section>
     );
   }
