@@ -56,6 +56,9 @@ const MS_PER_DAY = 86_400_000;
 const POST_ARRIVAL_ACTIVE_MS = 6 * 60 * MS_PER_MIN;
 /** After last trip event, switch to post-trip. */
 const POST_TRIP_GRACE_MS = 24 * 60 * MS_PER_MIN;
+/** Match useActiveFlight live airport departure window (G59). */
+const DEPARTURE_NAV_GRACE_MS = 60 * MS_PER_MIN;
+const DEPARTURE_NAV_AHEAD_MS = 12 * 60 * MS_PER_MIN;
 
 export function toUtcMs(localTime: string, timezone?: string): number {
   const normalized = localTime.trim().replace("T", " ").slice(0, 16);
@@ -151,6 +154,31 @@ function daysUntilDeparture(depMs: number, nowMs: number): number {
   const diff = depMs - nowMs;
   if (diff <= 0) return 0;
   return Math.max(1, Math.ceil(diff / MS_PER_DAY));
+}
+
+/** Outbound same airport in the live departure window beats stale arrive coach (BRI afternoon). */
+function hasSupersedingDepartureFromAirport(
+  flights: JourneyReservation[],
+  arrivalAirport: string,
+  afterArrMs: number,
+  nowMs: number,
+  skipFlightId?: string,
+): boolean {
+  const code = arrivalAirport.trim().toUpperCase();
+  if (!code) return false;
+  for (const other of flights) {
+    if (skipFlightId && other.id === skipFlightId) continue;
+    if (other.flightDepartureAirport?.trim().toUpperCase() !== code) continue;
+    const depMs = flightDepartureUtcMs(other);
+    if (Number.isNaN(depMs) || depMs <= afterArrMs) continue;
+    if (
+      depMs >= nowMs - DEPARTURE_NAV_GRACE_MS &&
+      depMs <= nowMs + DEPARTURE_NAV_AHEAD_MS
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function tripEndUtcMs(flights: JourneyReservation[], hotels: JourneyReservation[]): number {
@@ -277,6 +305,17 @@ export function computeJourneyPhase(args: {
     }
 
     if (nowMs >= arrMs && nowMs < arrMs + POST_ARRIVAL_ACTIVE_MS) {
+      if (
+        hasSupersedingDepartureFromAirport(
+          flights,
+          flight.flightArrivalAirport ?? "",
+          arrMs,
+          nowMs,
+          flight.id,
+        )
+      ) {
+        continue;
+      }
       const landedMinutesAgo = Math.max(0, Math.round((nowMs - arrMs) / MS_PER_MIN));
       return { kind: "just-landed", flight, landedMinutesAgo };
     }

@@ -6,6 +6,7 @@ import {
   selectFlightForDepartureIata,
   selectFlightForArrivalIata,
   selectFlightForAirportIata,
+  deriveNavigatorCoachModeForFlight,
   resolveCoachModeForPinnedAirport,
   toUtcMs,
   type FlightReservation,
@@ -175,7 +176,9 @@ test("selectFlightForDepartureIata pins ONT not earliest SEA leg", () => {
   const sea = selectFlightForDepartureIata(flights, "SEA", now);
   assert.equal(sea?.f.id, "as180");
   assert.equal(sea?.f.flightDepartureAirport, "SEA");
-  const fcoArrival = selectFlightForArrivalIata(flights, "FCO", now);
+  assert.equal(selectFlightForArrivalIata(flights, "FCO", now), null, "FCO arrive only inside 6h post-landing window");
+  const landedAtFco = Date.parse("2026-09-02T13:00:00Z");
+  const fcoArrival = selectFlightForArrivalIata(flights, "FCO", landedAtFco);
   assert.equal(fcoArrival?.f.id, "as180");
   assert.equal(
     resolveCoachModeForPinnedAirport(flights[0], "FCO"),
@@ -183,8 +186,87 @@ test("selectFlightForDepartureIata pins ONT not earliest SEA leg", () => {
   );
 });
 
+test("G59: BRI afternoon departure beats stale Sep 5 FCO→BRI arrival at same airport", () => {
+  const nowMs = Date.parse("2026-09-12T09:41:00.000Z"); // 11:41 Europe/Rome (CEST)
+  const flights: FlightReservation[] = [
+    {
+      id: "az1607-stale",
+      type: "flight",
+      title: "AZ 1607",
+      provider: "ITA Airways",
+      localTime: "2026-09-05 10:00",
+      timezone: "Europe/Rome",
+      location: "FCO",
+      flightNumber: "AZ1607",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      flightDepartureTime: "2026-09-05 10:00",
+      flightArrivalTime: "2026-09-05 11:00",
+      flightDate: "2026-09-05",
+    },
+    {
+      id: "flight-bri-vce",
+      type: "flight",
+      title: "ITA Airways",
+      provider: "ITA Airways",
+      confirmationCode: "Z84T4Z",
+      localTime: "2026-09-12 15:20",
+      flightDate: "2026-09-12",
+      flightDepartureTime: "2026-09-12 15:20",
+      flightArrivalTime: "2026-09-12 18:25",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "VCE",
+      timezone: "Europe/Rome",
+    },
+  ];
+  assert.equal(selectFlightForArrivalIata(flights, "BRI", nowMs), null);
+  const pinned = selectFlightForAirportIata(flights, "BRI", nowMs, null);
+  assert.equal(pinned?.f.id, "flight-bri-vce");
+  assert.equal(pinned?.f.flightDepartureAirport, "BRI");
+  const active = selectActiveFlight(flights, nowMs);
+  assert.equal(active?.f.id, "flight-bri-vce");
+  assert.equal(deriveNavigatorCoachModeForFlight(pinned!.f, nowMs), "depart");
+});
+
+test("G59: same-day morning inbound + afternoon outbound at BRI — outbound wins", () => {
+  const nowMs = Date.parse("2026-09-12T09:41:00.000Z"); // 11:41 Rome
+  const flights: FlightReservation[] = [
+    {
+      id: "az1607-today",
+      type: "flight",
+      title: "AZ 1607",
+      provider: "ITA Airways",
+      localTime: "2026-09-12 08:30",
+      timezone: "Europe/Rome",
+      flightNumber: "AZ1607",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      flightDepartureTime: "2026-09-12 08:30",
+      flightArrivalTime: "2026-09-12 09:25",
+      flightDate: "2026-09-12",
+    },
+    {
+      id: "flight-bri-vce",
+      type: "flight",
+      title: "ITA Airways",
+      provider: "ITA Airways",
+      confirmationCode: "Z84T4Z",
+      localTime: "2026-09-12 15:20",
+      flightDate: "2026-09-12",
+      flightDepartureTime: "2026-09-12 15:20",
+      flightArrivalTime: "2026-09-12 18:25",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "VCE",
+      timezone: "Europe/Rome",
+    },
+  ];
+  const pinned = selectFlightForAirportIata(flights, "BRI", nowMs, null);
+  assert.equal(pinned?.f.id, "flight-bri-vce");
+  assert.equal(deriveNavigatorCoachModeForFlight(pinned!.f, nowMs), "depart");
+});
+
 test("FCO arrive mode pins inbound AS180 — AZ1607 FCO→BRI cannot steal", () => {
-  const now = Date.parse("2026-08-23T12:00:00Z");
+  const landedAtFco = Date.parse("2026-09-02T13:00:00Z");
   const flights: FlightReservation[] = [
     {
       id: "as180",
@@ -213,11 +295,11 @@ test("FCO arrive mode pins inbound AS180 — AZ1607 FCO→BRI cannot steal", () 
       flightArrivalTime: "2026-09-05 11:00",
     },
   ];
-  const pinnedArrive = selectFlightForAirportIata(flights, "FCO", now, "arrive");
+  const pinnedArrive = selectFlightForAirportIata(flights, "FCO", landedAtFco, "arrive");
   assert.equal(pinnedArrive?.f.id, "as180");
   assert.equal(pinnedArrive?.f.flightArrivalAirport, "FCO");
-  const pinnedDefault = selectFlightForAirportIata(flights, "FCO", now, null);
-  assert.equal(pinnedDefault?.f.id, "as180", "earlier arrival leg wins over later FCO departure");
+  const pinnedDefault = selectFlightForAirportIata(flights, "FCO", landedAtFco, null);
+  assert.equal(pinnedDefault?.f.id, "as180", "active FCO arrival wins when in arrive window");
   assert.equal(
     resolveCoachModeForPinnedAirport(pinnedArrive!.f, "FCO", "arrive"),
     "arrive",

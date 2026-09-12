@@ -27,7 +27,6 @@ import {
   deriveAirportDayCoachMode,
   type AirportDayCoachMode,
 } from "@/lib/travelAssistant/airportDayCoach";
-import { timezoneForIata } from "@/lib/airports/lookup";
 import { computeJourneyPhase, type JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 import { resolveArrivalHotelLabel } from "@/lib/travelAssistant/airportSpotlightContext";
 import {
@@ -38,11 +37,11 @@ import {
   type TravelDayFlightPick,
 } from "@/lib/travelAssistant/flightSort";
 import {
+  flightArrivalUtcMs,
+  REMAINING_ARRIVAL_ACTIVE_MS,
   selectActiveArrivalFlight,
   selectRemainingJourneyFlight,
 } from "@/lib/travelAssistant/remainingJourneyFlight";
-import { canonicalFlightDepartureLocalTime } from "@/lib/travelAssistant/tripWindow";
-
 export interface FlightReservation {
   id: string;
   type: string;
@@ -143,11 +142,14 @@ export interface UseActiveFlightOptions {
   preferredMode?: "depart" | "arrive" | null;
 }
 
-function flightArrivalUtcMs(f: FlightReservation): number {
-  const arrivalLocal =
-    f.flightArrivalTime?.trim() ||
-    canonicalFlightDepartureLocalTime(f);
-  return toUtcMs(arrivalLocal, f.timezone);
+function isInDepartureNavigatorWindow(depUtcMs: number, nowMs: number): boolean {
+  const graceMs = WINDOW_BEHIND_MIN * 60_000;
+  const aheadMs = WINDOW_AHEAD_MIN * 60_000;
+  return depUtcMs >= nowMs - graceMs && depUtcMs <= nowMs + aheadMs;
+}
+
+function isInArrivalCoachWindow(arrUtcMs: number, nowMs: number): boolean {
+  return nowMs >= arrUtcMs && nowMs < arrUtcMs + REMAINING_ARRIVAL_ACTIVE_MS;
 }
 
 /** Pick the best flight for a pinned departure airport on this trip. */
@@ -159,6 +161,7 @@ export function selectFlightForDepartureIata(
   const code = iata.trim().toUpperCase();
   if (!code) return null;
   const graceMs = WINDOW_BEHIND_MIN * 60_000;
+  const aheadMs = WINDOW_AHEAD_MIN * 60_000;
   const candidates = reservations
     .filter(
       (r) =>
@@ -168,9 +171,11 @@ export function selectFlightForDepartureIata(
     .map((f) => ({ f, utcMs: flightDepartureUtcMs(f) }))
     .filter(({ utcMs }) => !isNaN(utcMs))
     .sort((a, b) => a.utcMs - b.utcMs);
-  const upcoming =
-    candidates.find(({ utcMs }) => utcMs >= nowMs - graceMs) ?? candidates[0] ?? null;
-  return upcoming;
+  const inWindow = candidates.filter(
+    ({ utcMs }) => utcMs >= nowMs - graceMs && utcMs <= nowMs + aheadMs,
+  );
+  if (inWindow[0]) return inWindow[0];
+  return candidates.find(({ utcMs }) => utcMs >= nowMs - graceMs) ?? null;
 }
 
 /** Pick the best flight for a pinned arrival airport (FCO first-mile, etc.). */
@@ -181,22 +186,18 @@ export function selectFlightForArrivalIata(
 ): ActiveFlight | null {
   const code = iata.trim().toUpperCase();
   if (!code) return null;
-  const graceMs = WINDOW_BEHIND_MIN * 60_000;
-  const candidates = reservations
-    .filter(
-      (r) =>
-        r.type === "flight" &&
-        r.flightArrivalAirport?.trim().toUpperCase() === code,
-    )
-    .map((f) => ({ f, utcMs: flightArrivalUtcMs(f) }))
-    .filter(({ utcMs }) => !isNaN(utcMs))
-    .sort((a, b) => a.utcMs - b.utcMs);
-  const upcoming =
-    candidates.find(({ utcMs }) => utcMs >= nowMs - graceMs) ?? candidates[0] ?? null;
-  return upcoming;
+  let best: ActiveFlight | null = null;
+  for (const r of reservations) {
+    if (r.type !== "flight") continue;
+    if (r.flightArrivalAirport?.trim().toUpperCase() !== code) continue;
+    const arrMs = flightArrivalUtcMs(r);
+    if (Number.isNaN(arrMs) || !isInArrivalCoachWindow(arrMs, nowMs)) continue;
+    if (!best || arrMs > best.utcMs) best = { f: r, utcMs: arrMs };
+  }
+  return best;
 }
 
-/** Match a pinned IATA to the correct leg — arrival when mode=arrive or when arrival is next at this airport. */
+/** Match a pinned IATA to the correct leg — never resurrect stale inbound legs. */
 export function selectFlightForAirportIata(
   reservations: FlightReservation[],
   iata: string,
@@ -211,12 +212,35 @@ export function selectFlightForAirportIata(
   }
   const arrival = selectFlightForArrivalIata(reservations, iata, nowMs);
   const departure = selectFlightForDepartureIata(reservations, iata, nowMs);
-  if (arrival && !departure) return arrival;
-  if (departure && !arrival) return departure;
-  if (!arrival || !departure) return null;
-  // FCO (and any hub with both inbound + outbound): pick the chronologically next
-  // event at this airport so AZ1607 FCO→BRI cannot steal AS180 SEA→FCO preview.
-  return arrival.utcMs <= departure.utcMs ? arrival : departure;
+  if (arrival && departure) {
+    const inArrivalCoach = isInArrivalCoachWindow(arrival.utcMs, nowMs);
+    const inDepartureWindow = isInDepartureNavigatorWindow(departure.utcMs, nowMs);
+    // Same airport with both legs live (morning FCO→BRI + afternoon BRI→VCE) — outbound wins.
+    if (inArrivalCoach && inDepartureWindow) return departure;
+    if (inDepartureWindow) return departure;
+    if (inArrivalCoach) return arrival;
+    return null;
+  }
+  if (departure) return departure;
+  if (arrival) return arrival;
+  return null;
+}
+
+/** Coach surface for the flight the navigator is showing — depart vs arrive leg. */
+export function deriveNavigatorCoachModeForFlight(
+  flight: FlightReservation,
+  nowMs: number = Date.now(),
+): AirportDayCoachMode {
+  const depMs = flightDepartureUtcMs(flight);
+  const arrMs = flightArrivalUtcMs(flight);
+  if (
+    !Number.isNaN(arrMs) &&
+    isInArrivalCoachWindow(arrMs, nowMs) &&
+    (Number.isNaN(depMs) || !isInDepartureNavigatorWindow(depMs, nowMs) || arrMs > depMs)
+  ) {
+    return "arrive";
+  }
+  return "depart";
 }
 
 /** Coach surface for a pinned airport — arrival IATA opens first-mile arrive copy. */
@@ -311,28 +335,39 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   );
 
   const navigatorFlight = useMemo(() => {
-    const arrivalRemaining = selectActiveArrivalFlight(reservations, nowMs);
-    if (arrivalRemaining && !pinnedFlight && arrivalRemaining.flightArrivalTime?.trim()) {
-      const arrivalTz =
-        timezoneForIata(arrivalRemaining.flightArrivalAirport ?? "") ?? arrivalRemaining.timezone;
-      const utcMs = toUtcMs(arrivalRemaining.flightArrivalTime.trim(), arrivalTz);
-      return { f: arrivalRemaining, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
-    }
-    if (journeyPhase.kind === "just-landed" && !pinnedFlight) {
-      const f = journeyPhase.flight as FlightReservation;
-      const arrivalLocal = f.flightArrivalTime?.trim();
-      if (arrivalLocal) {
-        const arrivalTz = timezoneForIata(f.flightArrivalAirport ?? "") ?? f.timezone;
-        const utcMs = toUtcMs(arrivalLocal, arrivalTz);
-        return { f, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+    if (pinnedFlight) return pinnedFlight;
+
+    // Outbound departure at the airport beats a stale or earlier inbound leg (BRI afternoon
+    // departure after a morning FCO→BRI arrival — never show Rome→Bari arrival coach).
+    if (activeFlight) {
+      const justLanded =
+        journeyPhase.kind === "just-landed"
+          ? (journeyPhase.flight as FlightReservation)
+          : null;
+      if (!justLanded || justLanded.id !== activeFlight.f.id) {
+        return activeFlight;
       }
     }
-    if (pinnedFlight) return pinnedFlight;
+
+    const arrivalRemaining = selectActiveArrivalFlight(reservations, nowMs);
+    if (arrivalRemaining) {
+      const utcMs = flightArrivalUtcMs(arrivalRemaining);
+      return { f: arrivalRemaining, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
+    }
+
+    if (journeyPhase.kind === "just-landed") {
+      const f = journeyPhase.flight as FlightReservation;
+      const utcMs = flightArrivalUtcMs(f);
+      if (!Number.isNaN(utcMs)) {
+        return { f, utcMs };
+      }
+    }
+
     if (remainingJourneyFlight) {
       const utcMs = flightDepartureUtcMs(remainingJourneyFlight);
       return { f: remainingJourneyFlight, utcMs: Number.isNaN(utcMs) ? nowMs : utcMs };
     }
-    return activeFlight ?? previewFlight;
+    return previewFlight;
   }, [
     journeyPhase,
     pinnedFlight,
@@ -344,23 +379,21 @@ export function useActiveFlight(options?: UseActiveFlightOptions): {
   ]);
 
   const navigatorCoachMode = useMemo(() => {
+    if (preferredMode === "arrive") return "arrive";
+    if (preferredMode === "depart") return "depart";
+    if (navigatorFlight) {
+      return deriveNavigatorCoachModeForFlight(navigatorFlight.f, nowMs);
+    }
     if (pinnedFlight && preferredIata) {
-      const resolved = resolveCoachModeForPinnedAirport(
+      return resolveCoachModeForPinnedAirport(
         pinnedFlight.f,
         preferredIata,
         preferredMode,
         coachMode,
       );
-      if (resolved === "arrive" || resolved === "depart") return resolved;
-      // Pinned flight is the arrival leg at this IATA — open first-mile arrive surface.
-      const code = preferredIata.trim().toUpperCase();
-      const dep = pinnedFlight.f.flightDepartureAirport?.trim().toUpperCase() ?? "";
-      const arr = pinnedFlight.f.flightArrivalAirport?.trim().toUpperCase() ?? "";
-      if (arr === code && dep !== code) return "arrive";
-      return coachMode;
     }
     return coachMode;
-  }, [pinnedFlight, preferredIata, preferredMode, coachMode]);
+  }, [navigatorFlight, pinnedFlight, preferredIata, preferredMode, coachMode, nowMs]);
 
   const hotelLabel = useMemo(() => {
     // Arrive coach only — never feed the first trip hotel (e.g. Polignano) into

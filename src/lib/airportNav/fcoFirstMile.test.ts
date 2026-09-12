@@ -120,7 +120,7 @@ test("FCO arrival journey without gate code still starts at gate-e", () => {
 });
 
 test("FCO arrive mode pins inbound AS180 when AZ1607 FCO→BRI is on the same trip", () => {
-  const now = Date.parse("2026-08-23T12:00:00Z");
+  const now = Date.parse("2026-09-02T13:00:00Z");
   const flights: FlightReservation[] = [
     {
       id: "as180",

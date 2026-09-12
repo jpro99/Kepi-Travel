@@ -22,7 +22,11 @@ import { AirportNavigatorMap } from "@/components/travelAssistant/AirportNavigat
 // Type-only import — fully erased at compile time, so the route's "server-only"
 // guard never runs in the client bundle. Single source of truth for the schema.
 import type { TravelProfile } from "@/app/api/travel-profile/route";
-import { selectActiveFlight, type FlightReservation } from "@/lib/travelAssistant/useActiveFlight";
+import {
+  deriveNavigatorCoachModeForFlight,
+  selectActiveFlight,
+  type FlightReservation,
+} from "@/lib/travelAssistant/useActiveFlight";
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 import {
   isHubConnectionActive,
@@ -449,14 +453,29 @@ export function AirportMode({ reservations, onViewReservations }: AirportModePro
     () => computeJourneyPhase({ reservations, nowMs: now }),
     [reservations, now],
   );
-  const coachMode = deriveAirportDayCoachMode(journeyPhase);
   const navigatorFlight = useMemo(() => {
+    if (activeFlight) {
+      const justLanded =
+        journeyPhase.kind === "just-landed"
+          ? (journeyPhase.flight as FlightReservation)
+          : null;
+      if (!justLanded || justLanded.id !== activeFlight.f.id) {
+        return activeFlight;
+      }
+    }
     if (journeyPhase.kind === "just-landed") {
       const f = journeyPhase.flight as FlightReservation;
       return { f, utcMs: now };
     }
     return activeFlight;
   }, [journeyPhase, activeFlight, now]);
+  const coachMode = useMemo(
+    () =>
+      navigatorFlight
+        ? deriveNavigatorCoachModeForFlight(navigatorFlight.f, now)
+        : deriveAirportDayCoachMode(journeyPhase),
+    [navigatorFlight, journeyPhase, now],
+  );
   const hotelLabel = useMemo(() => {
     // Arrive coach only — do not Uber to a distant trip hotel while departing.
     if (coachMode !== "arrive") return null;

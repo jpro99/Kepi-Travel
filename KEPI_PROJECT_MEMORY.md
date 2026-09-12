@@ -3,7 +3,15 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-06 (F20 Plan City belt shipped on preview branch)
+Last updated: 2026-09-12 (G59 BRI airport outbound coach fix)
+
+## Decision 2026-09-12 — G59: airport mode must show today's outbound leg, not stale inbound (Jeff, BRI)
+
+At Bari airport Map showed **FCO→BRI arrival coach** (AZ1607) while Jeff waited for **BRI→VCE** outbound — wrong direction, no departure map/tickets. Root cause: stale inbound legs resurrected outside the 6h arrive window; same-airport arrive+depart overlap preferred inbound; `journeyPhase.just-landed` drove coach mode even when today's outbound was active. **G59** fixes flight selection + coach mode derivation; regression tests lock BRI afternoon departure.
+
+## Decision 2026-09-12 — G58: travel day must show where you're sleeping tonight (Jeff)
+
+Home travel-day coach was departure-only (trains + flight) — Airbnb/hotel check-in same day was buried or missing. **G58** surfaces **Tonight** above the fold: property name, stored address, Maps link, post-landing cue. Airbnbs without confirmation codes are real stays (not `isPlannedReservation` placeholders).
 
 ## Decision 2026-09-06 — Plan City belt (F20, Jeff BUILD)
 

@@ -64,9 +64,9 @@ test("empty flightArrivalTime never opens synthetic arrive window (AS654)", () =
     ...EUROPE[0],
     flightArrivalTime: "",
   };
-  const afterWouldBeFakeLanding = Date.parse("2026-09-02T01:00:00Z");
-  assert.equal(selectActiveArrivalFlight([as654], afterWouldBeFakeLanding), null);
-  assert.equal(selectRemainingJourneyFlight([as654], afterWouldBeFakeLanding)?.id, "as654");
+  const withinRemainingGrace = Date.parse("2026-09-01T21:00:00Z"); // ~1h after ONT 12:50 dep
+  assert.equal(selectActiveArrivalFlight([as654], withinRemainingGrace), null);
+  assert.equal(selectRemainingJourneyFlight([as654], withinRemainingGrace)?.id, "as654");
   assert.equal(as654.flightArrivalTime, "");
 });
 

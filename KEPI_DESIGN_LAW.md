@@ -248,7 +248,10 @@ On a calendar travel day with booked train + flight (e.g. Lecce→Bari Centrale 
 **G58 — Travel day must show where you're sleeping tonight**  
 On any travel day with a booked check-in (hotel/Airbnb) the same calendar day, Home surfaces **Tonight** above the fold: property name, stored address (or city when address missing), check-in time only when on the confirmation, Maps directions link, and an honest post-landing cue (airport transport when verified, else “open Maps after you land”). Never show only the departure city — the arrival stay is part of the travel-day walkthrough.
 
-**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`
+**G59 — Airport mode never resurrects stale inbound legs**  
+Map/Airport coach at a departure airport must show today's **outbound** leg, not an old inbound (e.g. Sep 5 FCO→BRI while waiting for Sep 12 BRI→VCE). `selectFlightForArrivalIata` only returns legs inside the 6h post-landing window; `selectFlightForAirportIata` prefers live outbound when both arrive + depart windows overlap; `computeJourneyPhase` skips `just-landed` when an outbound from the same airport is in the live departure window; `navigatorCoachMode` follows the selected flight leg, not `journeyPhase` alone.
+
+**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/useActiveFlight.test.ts`
 
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`

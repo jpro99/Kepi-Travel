@@ -214,6 +214,40 @@ test("G49: mangled arrival before departure never claims just-landed", () => {
   }
 });
 
+test("G59: morning inbound + afternoon outbound at BRI stays pre-trip for outbound, not just-landed", () => {
+  const flights = [
+    {
+      id: "az1607",
+      type: "flight",
+      localTime: "2026-09-12 08:30",
+      timezone: "Europe/Rome",
+      flightDepartureTime: "2026-09-12 08:30",
+      flightArrivalTime: "2026-09-12 09:25",
+      flightDepartureAirport: "FCO",
+      flightArrivalAirport: "BRI",
+      flightNumber: "AZ1607",
+      flightDate: "2026-09-12",
+    },
+    {
+      id: "bri-vce",
+      type: "flight",
+      localTime: "2026-09-12 15:20",
+      timezone: "Europe/Rome",
+      flightDepartureTime: "2026-09-12 15:20",
+      flightArrivalTime: "2026-09-12 18:25",
+      flightDepartureAirport: "BRI",
+      flightArrivalAirport: "VCE",
+      flightDate: "2026-09-12",
+    },
+  ];
+  const nowMs = Date.parse("2026-09-12T09:41:00.000Z"); // 11:41 Rome — still in arrive window for AZ1607
+  const phase = computeJourneyPhase({ reservations: flights, nowMs });
+  assert.equal(phase.kind, "pre-trip");
+  if (phase.kind === "pre-trip") {
+    assert.equal(phase.nextFlight.id, "bri-vce");
+  }
+});
+
 test("G49: before departure always pre-trip even if arrival string looks past in wrong zone", () => {
   const flight = {
     id: "as654",
