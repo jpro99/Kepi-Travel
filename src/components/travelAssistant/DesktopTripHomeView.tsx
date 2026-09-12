@@ -214,7 +214,7 @@ export function DesktopTripHomeView({
         tripId={tripId}
       />
 
-      {hasTrip && !travelDayHomeLead ? (
+      {hasTrip ? (
         <TravelAskPanel
           destination={destination}
           tripName={tripName}

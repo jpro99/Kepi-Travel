@@ -254,7 +254,10 @@ Map/Airport coach at a departure airport must show today's **outbound** leg, not
 **G60 — Travel-day train phase must end**  
 On train+flight days, Home/Map must not show train-first copy all day. `areTravelDayTrainsComplete` ends the rail phase when the last leg's stored **ARRIVO** time (+10m buffer) has passed, or instantly when GPS geofences at today's **departure** airport. Then: airport headline, flight leave-by, BRI after-train steps, airport spotlight, and travel-day takeover unlock. Guidance geofence uses `selectActiveFlight` / `selectTravelDayDepartureFlight` — never storage-order stale legs.
 
-**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/travelDayTrainPhase.test.ts`
+**G61 — Kepi Help must always have a type field**  
+Travelers must be able to type any question on travel day (delays, missed connections, rights). The portaled mobile tab bar (`z-[99999]`) must never cover the help composer — full-screen `SupportChat` uses `SUPPORT_CHAT_Z_INDEX` above the tab bar, hides the tab bar while open, safe-area footer padding, and autofocus on open. Travel-day Home surfaces `TravelDayAskBar` (never hide Ask on active travel days). Disruption prompts lead: connecting flight, delay, EC 261.
+
+**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/travelDayTrainPhase.test.ts`, `src/lib/support/supportChatShell.test.ts`
 
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`
@@ -1170,6 +1173,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | I62 | `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/leaveCountdownBadge.test.ts`, `src/lib/airportNav/mapHelperNearby.test.ts` |
 | I22, ground connectors | `src/lib/travelAssistant/groundConnectorGaps.test.ts`, `src/lib/hotels/deriveTripStaySegments.test.ts` |
 | Support chat API shape | `src/lib/support/buildSupportChatApiMessages.test.ts` |
+| G61 | `src/lib/support/supportChatShell.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
 | D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
 | D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |

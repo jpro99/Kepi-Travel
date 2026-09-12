@@ -363,7 +363,7 @@ export function MobileMapForwardShell({
           tripId={tripId}
         />
 
-        {hasActiveTrip && !travelDayHomeLead ? (
+        {hasActiveTrip ? (
           <TravelAskPanel
             destination={destination}
             tripName={tripName}

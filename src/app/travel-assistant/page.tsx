@@ -11009,15 +11009,13 @@ export default function TravelAssistantPage() {
             </section>
           ) : (
             <section className="space-y-3">
-              {!travelDayHomeLead ? (
-                <TravelAskPanel
-                  destination={consumerTripDestination ?? activeTrip?.destination ?? null}
-                  tripName={activeTrip?.name ?? null}
-                  startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
-                  endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
-                  variant="embedded"
-                />
-              ) : null}
+              <TravelAskPanel
+                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                tripName={activeTrip?.name ?? null}
+                startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
+                endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
+                variant="embedded"
+              />
 
               {activeTrip && readinessItems.length > 0 ? (
                 <TripReadinessChecklistSection

@@ -68,6 +68,7 @@ import {
   resolveTrainTicketOpenTarget,
   type TrainTicketSourceReservation,
 } from "@/lib/travelAssistant/trainTicketHandoff";
+import { TravelDayAskBar } from "@/components/travelAssistant/TravelDayAskBar";
 
 export interface MissionControlLiveStatus {
   flightStatus?: string;
@@ -750,6 +751,8 @@ export function MissionControlView({
         >
           Trip overview
         </button>
+
+        <TravelDayAskBar destination={destination} />
       </section>
     );
   }
@@ -1455,6 +1458,8 @@ export function MissionControlView({
           </button>
         </article>
       ) : null}
+
+      {travelDayLead ? <TravelDayAskBar destination={destination} /> : null}
 
       {selectedDay ? (
         <DayDetailSheet

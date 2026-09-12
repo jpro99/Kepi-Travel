@@ -6,6 +6,10 @@ import { useTranslations } from "next-intl";
 import { ConsumerTabIcon } from "@/components/travelAssistant/ConsumerTabIcon";
 import type { MobilePrimaryTab } from "@/components/travelAssistant/mobile/mobileShellTypes";
 import { MOBILE_PRIMARY_TABS } from "@/components/travelAssistant/mobile/mobileShellTypes";
+import {
+  SUPPORT_CHAT_CLOSE_EVENT,
+  SUPPORT_CHAT_OPEN_EVENT,
+} from "@/lib/support/supportChatShell";
 
 interface MobileTabBarProps {
   activeTab?: MobilePrimaryTab;
@@ -18,9 +22,21 @@ interface MobileTabBarProps {
 export function MobileTabBar({ activeTab, onSelectTab, className = "", hidden = false }: MobileTabBarProps) {
   const t = useTranslations("ConsumerNav");
   const [portalReady, setPortalReady] = useState(false);
+  const [supportChatOpen, setSupportChatOpen] = useState(false);
 
   useEffect(() => {
     setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    const onOpen = (): void => setSupportChatOpen(true);
+    const onClose = (): void => setSupportChatOpen(false);
+    window.addEventListener(SUPPORT_CHAT_OPEN_EVENT, onOpen);
+    window.addEventListener(SUPPORT_CHAT_CLOSE_EVENT, onClose);
+    return () => {
+      window.removeEventListener(SUPPORT_CHAT_OPEN_EVENT, onOpen);
+      window.removeEventListener(SUPPORT_CHAT_CLOSE_EVENT, onClose);
+    };
   }, []);
 
   const handleSelect = useCallback(
@@ -81,7 +97,7 @@ export function MobileTabBar({ activeTab, onSelectTab, className = "", hidden = 
     </nav>
   );
 
-  if (!portalReady || hidden) {
+  if (!portalReady || hidden || supportChatOpen) {
     return null;
   }
 

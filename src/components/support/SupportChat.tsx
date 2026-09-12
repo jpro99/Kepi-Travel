@@ -15,15 +15,20 @@ import {
   AIRPORT_CONFIRM_SPOT_EVENT,
   AIRPORT_WALK_SHEET_EVENT,
 } from "@/lib/airportNav/airportWalkSheet";
+import {
+  dispatchSupportChatClose,
+  dispatchSupportChatOpen,
+  SUPPORT_CHAT_OPEN_EVENT,
+  SUPPORT_CHAT_Z_INDEX,
+} from "@/lib/support/supportChatShell";
 
-const SUPPORT_OPEN_EVENT = "kepi:support-chat-open";
 const PLAN_CITY_OPEN_EVENT = "kepi:plan-city-open";
 const SUPPORT_QUICK_PROMPTS = [
+  "Will I make my connecting flight?",
+  "My flight is delayed — what should I do?",
   "Where am I?",
-  "Best walking tour near me?",
-  "Restaurant with air conditioning?",
-  "What's my next travel day?",
   "What time is my train?",
+  "What's my next travel day?",
   "Plan a city day",
   "What are my EU passenger rights (EC 261)?",
 ] as const;
@@ -42,8 +47,7 @@ function nextMessageId(prefix: string): string {
 }
 
 export function openSupportChat(): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new Event(SUPPORT_OPEN_EVENT));
+  dispatchSupportChatOpen();
 }
 
 export function openPlanCityFromHelp(): void {
@@ -69,6 +73,7 @@ export function SupportChat() {
   const [walkSheetOpen, setWalkSheetOpen] = useState(false);
   const [confirmSpotOpen, setConfirmSpotOpen] = useState(false);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const isOpenRef = useRef(isOpen);
 
   useEffect(() => {
@@ -90,11 +95,25 @@ export function SupportChat() {
       setUnreadCount(0);
       setIsOpen(true);
     };
-    window.addEventListener(SUPPORT_OPEN_EVENT, onOpenRequested);
+    window.addEventListener(SUPPORT_CHAT_OPEN_EVENT, onOpenRequested);
     return () => {
-      window.removeEventListener(SUPPORT_OPEN_EVENT, onOpenRequested);
+      window.removeEventListener(SUPPORT_CHAT_OPEN_EVENT, onOpenRequested);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      dispatchSupportChatClose();
+      return;
+    }
+    dispatchSupportChatOpen();
+    const focusTimer = window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 120);
+    return () => {
+      window.clearTimeout(focusTimer);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const onBugReport = (): void => setBugReportOpen(true);
@@ -256,8 +275,11 @@ export function SupportChat() {
       <BugReportModal open={bugReportOpen} onClose={() => setBugReportOpen(false)} />
 
       {isOpen ? (
-        <section className="fixed inset-0 z-[120] flex bg-slate-950/75 sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[480px] sm:w-[320px] sm:rounded-2xl sm:border sm:border-slate-700 sm:bg-slate-950/95">
-          <div className="flex h-full w-full flex-col">
+        <section
+          className="fixed inset-0 flex h-[100dvh] max-h-[100dvh] flex-col bg-slate-950 sm:inset-auto sm:bottom-24 sm:right-6 sm:h-[480px] sm:max-h-[min(90dvh,640px)] sm:w-[min(100vw-2rem,380px)] sm:rounded-2xl sm:border sm:border-slate-700 sm:bg-slate-950/95"
+          style={{ zIndex: SUPPORT_CHAT_Z_INDEX }}
+        >
+          <div className="flex h-full min-h-0 w-full flex-col">
             <header className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
               <div>
                 <Logo size="sm" className="[&>span:last-child]:text-slate-100" />
@@ -266,14 +288,21 @@ export function SupportChat() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
-                className="rounded-md border border-slate-600 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                onClick={() => {
+                  setIsOpen(false);
+                  dispatchSupportChatClose();
+                }}
+                className="min-h-[44px] rounded-md border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
               >
                 {t("close")}
               </button>
             </header>
 
-            <div ref={panelScrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3 text-sm">
+            <div
+              ref={panelScrollRef}
+              className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 text-sm"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               {messages.length <= 1 ? (
                 <div className="flex flex-wrap gap-2">
                   {SUPPORT_QUICK_PROMPTS.map((prompt) => (
@@ -310,10 +339,13 @@ export function SupportChat() {
               ))}
             </div>
 
-            <footer className="border-t border-slate-700 px-3 py-3">
+            <footer
+              className="shrink-0 border-t border-slate-700 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+            >
               {error ? <p className="mb-2 text-xs text-rose-300">{error}</p> : null}
               <div className="flex gap-2">
                 <input
+                  ref={inputRef}
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
                   onKeyDown={(event) => {
@@ -323,7 +355,9 @@ export function SupportChat() {
                     }
                   }}
                   placeholder={t("inputPlaceholder")}
-                  className="flex-1 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300 focus-visible:ring-2"
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  className="min-h-[48px] flex-1 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-[17px] text-slate-100 outline-none ring-cyan-300 focus-visible:ring-2"
                 />
                 <button
                   type="button"

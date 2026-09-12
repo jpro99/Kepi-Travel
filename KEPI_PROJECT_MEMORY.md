@@ -271,6 +271,10 @@ CapApp-SPM is Swift tools **5.9** + remote Capacitor core only (G22) so Xcode 26
 
 Consumer More, empty Home, and Plan empty states use Lucide + light Apple cards (G21). No emoji section headers, no navy empty-trip cockpit. Gold Talk CTA kept. Confirmations on the trip are untouched.
 
+## Incident 2026-09-12 — Kepi Help had no type field (G61)
+
+Jeff at BRI with delayed flight could not type questions in Kepi Help — repeated report. Root cause: `SupportChat` panel `z-[120]` sat **under** portaled `MobileTabBar` `z-[99999]`, so the composer was hidden behind the tab bar; travel-day Home also hid `TravelAskPanel` when coach was active. Fix: raise help z-index, hide tab bar while chat open, safe-area footer + autofocus, `TravelDayAskBar` on travel-day Home, never hide Ask on travel days.
+
 ## Decision 2026-08-12 — Disruption help is calm (Picasso slice 5)
 
 Home/Flights delay and layover copy is factual (G20): “Short layover”, “Delayed”, “Cancelled” — not “connection issue”. Cancel still says Kepi will not invent seats (I32). Simulate-disruption buttons hidden in production. Confirmations on the trip are untouched.
