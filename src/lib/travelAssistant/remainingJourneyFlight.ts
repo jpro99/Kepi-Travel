@@ -80,9 +80,9 @@ export function selectActiveArrivalFlight<T extends FlightSortFields>(
   nowMs: number = Date.now(),
 ): T | null {
   const flights = reservations.filter(isBookedFlight);
-  const hotels = reservations.filter(
-    (row) => (row as HomeStayReservation).type === "hotel",
-  ) as HomeStayReservation[];
+  const hotels = reservations.flatMap((row) =>
+    row.type === "hotel" ? [row as unknown as HomeStayReservation] : [],
+  );
   let best: { f: T; arrMs: number } | null = null;
   for (const f of flights) {
     const depMs = flightDepartureUtcMs(f);

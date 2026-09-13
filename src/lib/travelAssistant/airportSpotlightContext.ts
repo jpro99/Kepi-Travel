@@ -133,27 +133,27 @@ export function resolveAirportSpotlightForHome(input: {
 }): HomeNextAction | null {
   const nowMs = input.nowMs ?? Date.now();
   const atAirport = input.atAirport || input.openAirportMode;
-  const journeyKind = input.journeyPhase?.kind;
+  const phase = input.journeyPhase;
+  const journeyKind = phase?.kind;
   const hotels = (input.reservations ?? []).filter((row) => row.type === "hotel");
   const arrivalFlight =
-    journeyKind === "just-landed"
-      ? (input.journeyPhase.flight as MissionControlReservation)
-      : journeyKind === "airborne"
-        ? (input.journeyPhase.onFlight as MissionControlReservation)
+    phase?.kind === "just-landed"
+      ? (phase.flight as MissionControlReservation)
+      : phase?.kind === "airborne"
+        ? (phase.onFlight as MissionControlReservation)
         : null;
   const suppressArrivalCoach = shouldSuppressHomeArrivalCoach({
     flight: arrivalFlight,
     hotels,
     nowMs,
     locationStatus: input.locationStatus,
-    landedMinutesAgo:
-      journeyKind === "just-landed" ? input.journeyPhase.landedMinutesAgo : null,
+    landedMinutesAgo: phase?.kind === "just-landed" ? phase.landedMinutesAgo : null,
   });
   if (suppressArrivalCoach && (journeyKind === "just-landed" || journeyKind === "airborne")) {
     return null;
   }
   const landedMinutesForGate =
-    journeyKind === "just-landed" ? input.journeyPhase.landedMinutesAgo : null;
+    phase?.kind === "just-landed" ? phase.landedMinutesAgo : null;
   const postArrivalOnGround =
     journeyKind === "just-landed" &&
     ((landedMinutesForGate ?? 0) >= 45 || input.locationStatus === "away");

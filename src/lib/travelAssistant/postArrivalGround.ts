@@ -13,10 +13,16 @@ import {
   travelerTodayKey,
   type HomeStayReservation,
 } from "@/lib/travelAssistant/homeTodayCoach";
-import { formatTravelDayArrivalLabel } from "@/lib/travelAssistant/homeTravelDayCoach";
 import { flightDepartureUtcMs } from "@/lib/travelAssistant/flightSort";
 
 const MS_PER_MIN = 60_000;
+
+/** Matches `formatTravelDayArrivalLabel` — VCE reads as Venice (G55). */
+function arrivalMetroLabel(arrivalAirport?: string | null): string {
+  const iata = arrivalAirport?.trim().toUpperCase() ?? "";
+  if (iata === "VCE") return "Venice";
+  return iata || "destination";
+}
 
 /** After scheduled arrival, stop Home arrival/deplane coach (Europe/Rome local clock). */
 export const POST_ARRIVAL_COACH_GRACE_MS = 30 * MS_PER_MIN;
@@ -35,7 +41,11 @@ export function flightArrivalUtcMsHonest(flight: PostArrivalFlightFields): numbe
   const arrivalTz = timezoneForIata(flight.flightArrivalAirport ?? "") ?? flight.timezone ?? undefined;
   const ms = toUtcMs(arrivalLocal, arrivalTz);
   if (Number.isNaN(ms)) return Number.NaN;
-  const depMs = flightDepartureUtcMs(flight);
+  const depMs = flightDepartureUtcMs({
+    localTime: flight.localTime ?? undefined,
+    timezone: flight.timezone ?? undefined,
+    flightDepartureTime: flight.flightDepartureTime ?? undefined,
+  });
   if (!Number.isNaN(depMs) && ms <= depMs) return Number.NaN;
   return ms;
 }
@@ -88,9 +98,7 @@ export function hasActiveMidStayAtArrival(input: {
   );
   if (!activeHotel) return false;
 
-  const arrivalCity = formatTravelDayArrivalLabel({
-    flightArrivalAirport: input.flight.flightArrivalAirport ?? undefined,
-  });
+  const arrivalCity = arrivalMetroLabel(input.flight.flightArrivalAirport);
   const stayCity =
     activeHotel.hotelSearchCity?.trim() ||
     activeHotel.location?.trim() ||
