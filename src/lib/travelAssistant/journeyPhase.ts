@@ -4,6 +4,7 @@
  */
 
 import { isFlightAirborneAt } from "./flightAirborneState";
+import { shouldSuppressHomeArrivalCoach } from "./postArrivalGround";
 
 import {
   canonicalFlightDepartureLocalTime,
@@ -297,7 +298,16 @@ export function computeJourneyPhase(args: {
     // leaving for ONT (or any origin).
     if (nowMs < depMs) continue;
 
+    const arrivalTz = timezoneForIata(flight.flightArrivalAirport ?? "") ?? flight.timezone;
+    const suppressArrivalCoach = shouldSuppressHomeArrivalCoach({
+      flight,
+      hotels,
+      nowMs,
+      timezone: arrivalTz,
+    });
+
     if (isFlightAirborneAt(flight, nowMs)) {
+      if (suppressArrivalCoach) continue;
       const minsLeft = Math.max(0, Math.round((arrMs - nowMs) / MS_PER_MIN));
       return {
         kind: "airborne",
@@ -319,6 +329,7 @@ export function computeJourneyPhase(args: {
       ) {
         continue;
       }
+      if (suppressArrivalCoach) continue;
       const landedMinutesAgo = Math.max(0, Math.round((nowMs - arrMs) / MS_PER_MIN));
       return { kind: "just-landed", flight, landedMinutesAgo };
     }

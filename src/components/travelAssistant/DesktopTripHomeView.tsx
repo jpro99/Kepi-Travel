@@ -165,7 +165,11 @@ export function DesktopTripHomeView({
       }),
     [tripName, destination, startDate, endDate, reservations, stayDecisions, liveStatus, hasTrip, stopRanges, travelerTimezone],
   );
-  const travelTakeover = isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
+  const travelTakeover = isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport, {
+    hotels: reservations.filter((row) => row.type === "hotel"),
+    timezone: travelerTimezone,
+    locationStatus,
+  });
   const travelDayHomeLead = useMemo(
     () =>
       hasActiveTravelDayCoach({

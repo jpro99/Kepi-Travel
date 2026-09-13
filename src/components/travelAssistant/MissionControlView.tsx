@@ -22,6 +22,7 @@ import {
   shouldShowTravelOpsChrome,
   type ConnectionCalmStatus,
 } from "@/lib/travelAssistant/homeDayTruth";
+import { shouldSuppressHomeArrivalCoach } from "@/lib/travelAssistant/postArrivalGround";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNightCoverage";
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
@@ -441,6 +442,30 @@ export function MissionControlView({
     return resolveArrivalHotelLabel(hotels, dateKey);
   }, [journeyPhase, reservations]);
 
+  const suppressArrivalHomeCoach = useMemo(() => {
+    if (journeyPhase?.kind !== "just-landed" && journeyPhase?.kind !== "airborne") {
+      return false;
+    }
+    const flight =
+      journeyPhase.kind === "just-landed"
+        ? (journeyPhase.flight as MissionControlReservation)
+        : (journeyPhase.onFlight as MissionControlReservation);
+    return shouldSuppressHomeArrivalCoach({
+      flight,
+      hotels: reservations.filter((row) => row.type === "hotel"),
+      timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+      locationStatus,
+      landedMinutesAgo:
+        journeyPhase.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null,
+    });
+  }, [
+    journeyPhase,
+    reservations,
+    travelerTimezone,
+    snap.tonightHotel?.timezone,
+    locationStatus,
+  ]);
+
   const airportSpotlight = useMemo(
     () =>
       resolveAirportSpotlightForHome({
@@ -541,7 +566,12 @@ export function MissionControlView({
 
   const todayCoach = useMemo(() => {
     if (!showTravelOps || snap.phase !== "at_destination") return null;
-    if (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") return null;
+    if (
+      (journeyPhase?.kind === "airborne" || journeyPhase?.kind === "just-landed") &&
+      !suppressArrivalHomeCoach
+    ) {
+      return null;
+    }
     return buildHomeTodayCoach({
       reservations,
       stopRanges,
@@ -551,6 +581,7 @@ export function MissionControlView({
     showTravelOps,
     snap.phase,
     journeyPhase?.kind,
+    suppressArrivalHomeCoach,
     reservations,
     stopRanges,
     travelerTimezone,
@@ -650,7 +681,11 @@ export function MissionControlView({
   const travelTakeover =
     (!travelDayLead || travelDayTrainsComplete) &&
     journeyPhase != null &&
-    isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport);
+    isTravelDayTakeover(journeyPhase, snap.openAirportMode || atAirport, {
+      hotels: reservations.filter((row) => row.type === "hotel"),
+      timezone: travelDayTimezone,
+      locationStatus,
+    });
 
   // I36 — Wallet-grade travel day: one headline, one CTA, nothing else.
   if (travelTakeover) {

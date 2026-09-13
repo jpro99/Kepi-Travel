@@ -26,6 +26,7 @@ import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransp
 import { firstHotelCityAfter } from "@/lib/travelAssistant/reconcilePlanNoteWithHotels";
 import type { HotelStayLegInput } from "@/lib/travelAssistant/hotelAnchoredStayLegs";
 import { flightArrivalUtcMs, isFlightAirborneAt } from "@/lib/travelAssistant/flightAirborneState";
+import { shouldSuppressHomeArrivalCoach } from "@/lib/travelAssistant/postArrivalGround";
 
 function toUtcMs(localTime: string, timezone?: string): number {
   const local = localTime?.trim() ?? "";
@@ -130,8 +131,27 @@ export function resolveAirportSpotlightForHome(input: {
   credentials?: { tsaPreCheck?: boolean; clear?: boolean; globalEntry?: boolean; hasLoungeAccess?: boolean };
   nowMs?: number;
 }): HomeNextAction | null {
+  const nowMs = input.nowMs ?? Date.now();
   const atAirport = input.atAirport || input.openAirportMode;
   const journeyKind = input.journeyPhase?.kind;
+  const hotels = (input.reservations ?? []).filter((row) => row.type === "hotel");
+  const arrivalFlight =
+    journeyKind === "just-landed"
+      ? (input.journeyPhase.flight as MissionControlReservation)
+      : journeyKind === "airborne"
+        ? (input.journeyPhase.onFlight as MissionControlReservation)
+        : null;
+  const suppressArrivalCoach = shouldSuppressHomeArrivalCoach({
+    flight: arrivalFlight,
+    hotels,
+    nowMs,
+    locationStatus: input.locationStatus,
+    landedMinutesAgo:
+      journeyKind === "just-landed" ? input.journeyPhase.landedMinutesAgo : null,
+  });
+  if (suppressArrivalCoach && (journeyKind === "just-landed" || journeyKind === "airborne")) {
+    return null;
+  }
   const landedMinutesForGate =
     journeyKind === "just-landed" ? input.journeyPhase.landedMinutesAgo : null;
   const postArrivalOnGround =
@@ -140,10 +160,9 @@ export function resolveAirportSpotlightForHome(input: {
   const travelDay =
     (journeyKind === "just-landed" && !postArrivalOnGround) ||
     (journeyKind === "airborne" && input.locationStatus === "airborne") ||
-    atAirport;
+    (atAirport && journeyKind !== "just-landed" && journeyKind !== "airborne");
   if (!travelDay) return null;
 
-  const nowMs = input.nowMs ?? Date.now();
   const transportReservations = (input.reservations ?? []) as TransportRouteReservation[];
 
   const connectionPlaybook = buildConnectionPlaybook(transportReservations, nowMs);
