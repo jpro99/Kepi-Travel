@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-12 (G60 train phase ends at airport)
+Last updated: 2026-09-13 (G64 mid-stay deplane coach hardening)
+
+## Decision 2026-09-13 — G64: mid-stay never leads with leave-the-plane (Jeff, Venice Sep 13)
+
+Jeff phone still saw **Leave aircraft / deplane** coach ~5h after VCE landing during Venice mid-stay (prod box OK — likely PWA/cache). Hardened with `postArrivalGround.ts`: past arrival (+30m grace), booked stay at arrival metro, or calendar day after landing suppresses `just-landed`/`airborne` Home takeover and airport spotlight. Regression: Sep 13 afternoon Europe/Rome after Sep 12 18:25 VCE arrival → Home leads Venice mid-stay, zero deplane copy.
 
 ## Decision 2026-09-12 — G60: travel-day train phase must end (Jeff, BRI — 4th airport failure)
 
