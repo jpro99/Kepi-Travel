@@ -3,6 +3,7 @@
  * Prevents stale "you're still on the plane" guidance after landing.
  */
 
+import { timezoneForIata } from "@/lib/airports/lookup";
 import { toUtcMs } from "./journeyPhase";
 
 export interface FlightTimingFields {
@@ -13,6 +14,8 @@ export interface FlightTimingFields {
   flightDate?: string;
   flightDepartureTime?: string;
   flightArrivalTime?: string;
+  flightDepartureAirport?: string;
+  flightArrivalAirport?: string;
   flightStatus?: string;
 }
 
@@ -60,8 +63,11 @@ export function flightDepartureUtcMs(flight: FlightTimingFields): number {
 
 export function flightArrivalUtcMs(flight: FlightTimingFields): number {
   if (flight.flightArrivalTime?.trim()) {
-    const ms = toUtcMs(flight.flightArrivalTime, flight.timezone);
-    if (!Number.isNaN(ms)) return ms;
+    const arrivalTz =
+      timezoneForIata(flight.flightArrivalAirport ?? "") ?? flight.timezone ?? undefined;
+    const ms = toUtcMs(flight.flightArrivalTime, arrivalTz);
+    const depMs = flightDepartureUtcMs(flight);
+    if (!Number.isNaN(ms) && (Number.isNaN(depMs) || ms > depMs)) return ms;
   }
   const depMs = flightDepartureUtcMs(flight);
   if (!Number.isNaN(depMs)) return depMs + 4 * 60 * MS_PER_MIN;

@@ -10,6 +10,11 @@ import {
   type FlightSortFields,
 } from "@/lib/travelAssistant/flightSort";
 import { timezoneForIata } from "@/lib/airports/lookup";
+import {
+  hasActiveMidStayAtArrival,
+  hasTravelerLeftAircraft,
+} from "@/lib/travelAssistant/postArrivalGround";
+import type { HomeStayReservation } from "@/lib/travelAssistant/homeTodayCoach";
 
 const MS_PER_MIN = 60_000;
 /** Match journeyPhase POST_ARRIVAL_ACTIVE_MS — stay on arrive coach after landing. */
@@ -75,12 +80,21 @@ export function selectActiveArrivalFlight<T extends FlightSortFields>(
   nowMs: number = Date.now(),
 ): T | null {
   const flights = reservations.filter(isBookedFlight);
+  const hotels = reservations.flatMap((row) =>
+    row.type === "hotel" ? [row as unknown as HomeStayReservation] : [],
+  );
   let best: { f: T; arrMs: number } | null = null;
   for (const f of flights) {
     const depMs = flightDepartureUtcMs(f);
     const arrMs = flightArrivalUtcMs(f);
     if (Number.isNaN(arrMs) || nowMs < depMs) continue;
     if (nowMs < arrMs || nowMs >= arrMs + REMAINING_ARRIVAL_ACTIVE_MS) continue;
+    if (
+      hasTravelerLeftAircraft(f, nowMs) ||
+      hasActiveMidStayAtArrival({ flight: f, hotels, nowMs, timezone: f.timezone })
+    ) {
+      continue;
+    }
     if (!best || arrMs > best.arrMs) best = { f, arrMs };
   }
   return best?.f ?? null;

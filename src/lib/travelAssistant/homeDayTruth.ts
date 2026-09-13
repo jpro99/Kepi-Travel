@@ -5,6 +5,8 @@
 
 import { buildTripTransportRoute, type TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
+import type { HomeStayReservation } from "@/lib/travelAssistant/homeTodayCoach";
+import { shouldSuppressHomeArrivalCoach } from "@/lib/travelAssistant/postArrivalGround";
 import { connectionConflictCalmLine } from "@/lib/travelAssistant/disruptionCalm";
 import { buildEntryGuidanceItems } from "@/lib/travelAssistant/tripOrchestration";
 
@@ -92,8 +94,32 @@ export function buildConnectionCalmStatus(
 }
 
 /** True when Home should lead with travel-day / in-journey chrome. */
-export function isTravelDayTakeover(phase: JourneyPhase, openAirportMode: boolean): boolean {
-  if (phase.kind === "airborne" || phase.kind === "just-landed") return true;
+export function isTravelDayTakeover(
+  phase: JourneyPhase,
+  openAirportMode: boolean,
+  options?: {
+    hotels?: readonly HomeStayReservation[];
+    nowMs?: number;
+    timezone?: string | null;
+    locationStatus?: string | null;
+  },
+): boolean {
+  if (phase.kind === "airborne" || phase.kind === "just-landed") {
+    const flight = phase.kind === "just-landed" ? phase.flight : phase.onFlight;
+    if (
+      shouldSuppressHomeArrivalCoach({
+        flight,
+        hotels: options?.hotels,
+        nowMs: options?.nowMs,
+        timezone: options?.timezone,
+        locationStatus: options?.locationStatus,
+        landedMinutesAgo: phase.kind === "just-landed" ? phase.landedMinutesAgo : null,
+      })
+    ) {
+      return openAirportMode;
+    }
+    return true;
+  }
   return openAirportMode;
 }
 
