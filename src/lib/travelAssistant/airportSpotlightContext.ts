@@ -133,7 +133,7 @@ export function resolveAirportSpotlightForHome(input: {
   const atAirport = input.atAirport || input.openAirportMode;
   const journeyKind = input.journeyPhase?.kind;
   const landedMinutesForGate =
-    journeyKind === "just-landed" ? input.journeyPhase.landedMinutesAgo : null;
+    journeyKind === "just-landed" ? (input.journeyPhase?.landedMinutesAgo ?? null) : null;
   const postArrivalOnGround =
     journeyKind === "just-landed" &&
     ((landedMinutesForGate ?? 0) >= 45 || input.locationStatus === "away");

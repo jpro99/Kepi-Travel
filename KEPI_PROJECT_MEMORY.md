@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-12 (G60 train phase ends at airport)
+Last updated: 2026-09-14 (G65 FCO gospel connection walk)
+
+## Decision 2026-09-14 — G65: FCO gospel connection walk (Weekly Empire B1)
+
+FCO same-airport connections (e.g. Z84T4Z BRI→FCO→VCE) now use `buildFcoGospelConnectionWalk` — ordered steps from signed KAC package nodes + `getAirportNav` official text only. Missing gate = **Unknown**; no e-gate copy unless ADR publishes EU lane in `customsTip`. Wired through `connectionPlaybook`, `connectionClock`, and Home spotlight. Fixture: `fixtures/fcoConnectionSep12Fixture.ts`.
 
 ## Decision 2026-09-12 — G60: travel-day train phase must end (Jeff, BRI — 4th airport failure)
 

@@ -5,6 +5,13 @@
 
 import { resolveAirport } from "@/lib/airports/lookup";
 import { isInternationalArrivalFlight } from "@/lib/travelAssistant/airportDayCoach";
+import {
+  buildFcoGospelConnectionWalk,
+  buildFcoHubConnectionContext,
+  estimateFcoConnectionWalkMinutes,
+  fcoPackageSupportsGospelConnectionWalk,
+  gospelStepsToPlaybookSteps,
+} from "@/lib/travelAssistant/fcoGospelConnectionWalk";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRoute";
 
@@ -80,6 +87,42 @@ export function buildConnectionPlaybook(
 
     const inboundRes = reservations.find((r) => r.id === inbound.reservationId);
     const outboundRes = reservations.find((r) => r.id === outbound.reservationId);
+
+    if (hub === "FCO" && fcoPackageSupportsGospelConnectionWalk() && inboundRes && outboundRes) {
+      const hubCtx = buildFcoHubConnectionContext(inboundRes, outboundRes, hub);
+      if (hubCtx) {
+        const walk = estimateFcoConnectionWalkMinutes({
+          arrivalGate: hubCtx.inbound.arrivalGate,
+          departureGate: hubCtx.outbound.departureGate,
+        });
+        const gospelSteps = buildFcoGospelConnectionWalk({
+          ctx: hubCtx,
+          gateSources: { bookedGate: outboundRes.flightDepartureGate, departureIata: hub },
+          walkMinutes: walk.minutes,
+          walkKnown: walk.known,
+        });
+        const connectionActive =
+          gapMinutes != null &&
+          Number.isFinite(gapMinutes) &&
+          arriveMs != null &&
+          nowMs >= arriveMs - 30 * 60_000 &&
+          (departMs == null || nowMs <= departMs + 60 * 60_000);
+
+        if (requireActiveWindow && !connectionActive && risk !== "impossible" && risk !== "tight") {
+          continue;
+        }
+
+        return {
+          hubIata: hub,
+          inboundFlight: inboundRes.flightNumber ?? null,
+          outboundFlight: outboundRes.flightNumber ?? null,
+          risk,
+          gapMinutes,
+          steps: gospelStepsToPlaybookSteps(gospelSteps),
+          issueLine,
+        };
+      }
+    }
     const inboundDep = inboundRes?.flightDepartureAirport?.trim().toUpperCase() ?? "";
     const outboundArr = outboundRes?.flightArrivalAirport?.trim().toUpperCase() ?? "";
 
