@@ -263,7 +263,13 @@ Help "where am I" must prefer GPS airport campus, travel-day outbound flight, an
 **G61 — Kepi Help must always have a type field**  
 Travelers must be able to type any question on travel day (delays, missed connections, rights). The portaled mobile tab bar (`z-[99999]`) must never cover the help composer — full-screen `SupportChat` uses `SUPPORT_CHAT_Z_INDEX` above the tab bar, hides the tab bar while open, safe-area footer padding, and autofocus on open. Travel-day Home surfaces `TravelDayAskBar` (never hide Ask on active travel days). Disruption prompts lead: connecting flight, delay, EC 261.
 
-**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/travelDayTrainPhase.test.ts`, `src/lib/support/supportChatShell.test.ts`
+**G64 — Mid-stay must never lead with deplane / leave-plane**  
+After landing, once the traveler has left the aircraft (30m grace, calendar day after arrival, or active stay at arrival metro), Home must not show arrival/deplane coach. `postArrivalGround.ts` gates `journeyPhase` just-landed, airport spotlight, and Mission Control takeover.
+
+**G66 — Plan never dumps OTA email footers; Home shows honest next move**  
+Airbnb/Booking confirmation footers (App Store, Brannan St, interstitial URLs, email prefs) are stripped from Plan bullets and blocked from day-plan backfill. Stay facts come from `letterStayFactsForDay` only (check-in/out, guests, address when stored). Mid-stay Home must surface the next travel day (checkout + connector) with stored train tickets when present, or an honest “no train ticket stored — forward to trip inbox” line — never invent PNRs or hunt Trenitalia. `computeJourneyPhase` must not return `post-trip` while an active hotel stay remains.
+
+**Test:** `src/lib/travelAssistant/journeyPhase.test.ts`, `src/lib/travelAssistant/departLeaveTiming.test.ts`, `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/travelDayTrainPhase.test.ts`, `src/lib/support/supportChatShell.test.ts`, `src/lib/travelAssistant/stripOtaEmailFooter.test.ts`, `src/lib/travelAssistant/postArrivalGround.test.ts`, `src/lib/travelAssistant/homeTodayCoach.test.ts`
 
 
 **Test:** `src/lib/airportNav/officialWayfinding.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts`
@@ -1182,6 +1188,8 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G61 | `src/lib/support/supportChatShell.test.ts` |
 | G62 | `src/lib/support/tripHelpAnswer.test.ts` |
 | G63 | `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
+| G64 | `src/lib/travelAssistant/postArrivalGround.test.ts` |
+| G66 | `src/lib/travelAssistant/stripOtaEmailFooter.test.ts`, `src/lib/travelAssistant/homeTodayCoach.test.ts`, `src/lib/travelAssistant/journeyPhase.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
 | D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
 | D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |

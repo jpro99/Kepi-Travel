@@ -299,6 +299,16 @@ interface MoveCandidate {
   priority: number;
 }
 
+function hasBookedTrainOnDay(
+  reservations: HomeStayReservation[],
+  dateKey: string,
+): boolean {
+  return reservations.some((reservation) => {
+    if (!isBookedTrain(reservation)) return false;
+    return dateOnly(reservation.localTime) === dateKey;
+  });
+}
+
 function findNextTravelMove(input: {
   reservations: HomeStayReservation[];
   todayKey: string;
@@ -392,14 +402,28 @@ function findNextTravelMove(input: {
     const headline = nextStay
       ? `${fromCity} → ${nextStay.city}`
       : `Checkout from ${fromCity}`;
-    const detail = nextStay?.lodgingName
-      ? `Checkout · next stay ${nextStay.lodgingName}`
-      : "Checkout day — confirm time with the property.";
+    const checkoutTime = formatLocalTime(checkout.reservation.checkOutDate);
+    const hasTrain = hasBookedTrainOnDay(input.reservations, earliestDate);
+    const detailBits: string[] = [];
+    if (checkoutTime) detailBits.push(`Checkout by ${checkoutTime}`);
+    else detailBits.push("Checkout day");
+    if (nextStay?.lodgingName) {
+      detailBits.push(`next stay ${nextStay.lodgingName}`);
+    } else if (nextStay?.city) {
+      detailBits.push(`heading to ${nextStay.city}`);
+    }
+    if (nextStay && !hasTrain) {
+      detailBits.push(
+        "No train ticket stored — forward your Trenitalia confirmation to your trip inbox",
+      );
+    } else if (!hasTrain && !nextStay) {
+      detailBits.push("Confirm checkout time with the property");
+    }
     return {
       dateKey: earliestDate,
       dayLabel,
       headline,
-      detail,
+      detail: detailBits.join(" · "),
       kind: "checkout",
       reservationId: checkout.reservation.id,
     };
@@ -535,12 +559,27 @@ export function homeTodayCoachNextAction(
   if (coach.nextTravelMove) {
     const move = coach.nextTravelMove;
     const hasTickets = Boolean(options?.hasTrainTicketHandoff && options?.ticketUrl);
+    const needsTicketForward =
+      move.kind === "checkout" && /no train ticket stored/i.test(move.detail ?? "");
     return {
-      kind: hasTickets || move.kind === "train" ? "prep" : move.kind === "flight" ? "flight" : "ready",
+      kind:
+        hasTickets || move.kind === "train"
+          ? "prep"
+          : move.kind === "flight"
+            ? "flight"
+            : needsTicketForward
+              ? "review"
+              : "ready",
       eyebrow: "Next travel day",
       title: `${move.dayLabel} — ${move.headline}`,
       detail: move.detail,
-      ctaLabel: hasTickets ? "Train tickets" : move.kind === "flight" ? "Open flight" : "Open Plan",
+      ctaLabel: hasTickets
+        ? "Train tickets"
+        : move.kind === "flight"
+          ? "Open flight"
+          : needsTicketForward
+            ? "Forward ticket"
+            : "Open Plan",
       prepHref: hasTickets ? options?.ticketUrl ?? undefined : undefined,
       reservationId: move.reservationId,
     };

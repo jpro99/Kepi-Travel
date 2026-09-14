@@ -8,6 +8,8 @@ import {
 } from "@/lib/travelAssistant/homeTodayCoach";
 import { selectNextRemainingFlight } from "@/lib/travelAssistant/flightSort";
 import { buildTrainTicketHandoffContent } from "@/lib/travelAssistant/trainTicketHandoff";
+import { BARI_VENICE_SEP_12_RESERVATIONS } from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
+import { computeJourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
 const EUROPE_PUGLIA = [
   {
@@ -208,6 +210,33 @@ test("travelerTodayKey uses stay timezone for calendar today", () => {
   const romeLate = Date.parse("2026-09-03T22:30:00Z");
   assert.equal(travelerTodayKey(romeLate, "Europe/Rome"), "2026-09-04");
   assert.equal(travelerTodayKey(romeLate), "2026-09-03");
+});
+
+test("G66: Venice Sep 14 eve shows Sep 15 checkout move with honest no-ticket copy", () => {
+  const nowMs = Date.parse("2026-09-14T10:00:00Z");
+  const reservations = [...BARI_VENICE_SEP_12_RESERVATIONS];
+  const phase = computeJourneyPhase({ reservations, nowMs });
+  assert.equal(phase.kind, "pre-trip");
+
+  const coach = buildHomeTodayCoach({
+    reservations,
+    stopRanges: [
+      { stop: { name: "Venice" }, checkIn: "2026-09-12", checkOut: "2026-09-15", nights: 3 },
+      { stop: { name: "Cortina d'Ampezzo" }, checkIn: "2026-09-15", checkOut: "2026-09-18", nights: 3 },
+    ],
+    nowMs,
+    timezone: "Europe/Rome",
+  });
+  assert.ok(coach);
+  assert.match(coach!.leadTitle, /Venice/i);
+  assert.equal(coach!.nextTravelMove?.dateKey, "2026-09-15");
+  assert.match(coach!.nextTravelMove?.headline ?? "", /Venice.*Cortina/i);
+  assert.match(coach!.nextTravelMove?.detail ?? "", /No train ticket stored/i);
+
+  const next = homeTodayCoachNextAction(coach!);
+  assert.equal(next.eyebrow, "Next travel day");
+  assert.match(next.title, /Sep 15/i);
+  assert.equal(next.ctaLabel, "Forward ticket");
 });
 
 test("buildHomeTodayCoach does not invent Monopoli when not on itinerary", () => {

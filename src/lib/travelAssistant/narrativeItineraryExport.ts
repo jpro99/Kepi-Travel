@@ -13,6 +13,7 @@ import {
 } from "@/lib/travelAssistant/letterDayPlan";
 import { preferDayActivityNote } from "@/lib/travelAssistant/planDayEdit";
 import { sanitizeTravelerNotes } from "@/lib/travelAssistant/sanitizeTravelerNotes";
+import { stripOtaEmailFooterLines } from "@/lib/travelAssistant/stripOtaEmailFooter";
 import {
   canonicalFlightDepartureDay,
   dateOnly,
@@ -102,11 +103,12 @@ export function narrativeTripDayNumber(
 
 /** Split day notes into lines without dedupe (used to detect stale duplicate imports). */
 export function parseDayPlanBulletLines(notes: string): string[] {
-  return sanitizeTravelerNotes(notes)
+  const lines = sanitizeTravelerNotes(notes)
     .split(/\r?\n/u)
     .map((line) => line.replace(/^\s*[•\-\*]\s*/u, "").trim())
     .filter(Boolean)
     .filter((line) => !/^stay in /iu.test(line) && !/^hotel:/iu.test(line));
+  return stripOtaEmailFooterLines(lines);
 }
 
 export function notesToBullets(notes: string): string[] {

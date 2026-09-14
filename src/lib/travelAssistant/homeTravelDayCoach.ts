@@ -535,7 +535,10 @@ export function resolveActiveTravelDayCoach(input: {
   }
 
   const tomorrowKey = addIsoDays(todayKey, 1);
-  if (isTrainFlightTravelDayPattern(input.reservations, tomorrowKey)) {
+  if (
+    isTrainFlightTravelDayPattern(input.reservations, tomorrowKey) ||
+    dayHasBookedTravelMoves(input.reservations, tomorrowKey)
+  ) {
     const coach = buildHomeTravelDayCoach({
       reservations: input.reservations,
       dateKey: tomorrowKey,

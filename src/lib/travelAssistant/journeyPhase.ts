@@ -4,6 +4,7 @@
  */
 
 import { isFlightAirborneAt } from "./flightAirborneState";
+import { shouldSuppressHomeArrivalCoach } from "./postArrivalGround";
 
 import {
   canonicalFlightDepartureLocalTime,
@@ -122,6 +123,31 @@ function flightArrivalUtcMs(flight: JourneyReservation): number {
   }
   if (!Number.isNaN(depMs)) return depMs + 4 * 60 * MS_PER_MIN;
   return Number.NaN;
+}
+
+function activeHotelCoveringNow(hotels: JourneyReservation[], nowMs: number): JourneyReservation | null {
+  for (const hotel of hotels) {
+    const end = hotelEndUtcMs(hotel);
+    if (!Number.isNaN(end) && nowMs < end) return hotel;
+  }
+  return null;
+}
+
+function midStayPreTripFromHotel(hotel: JourneyReservation, nowMs: number): JourneyPhase {
+  const checkInMs = toUtcMs(hotel.localTime, hotel.timezone);
+  const daysUntil = Number.isNaN(checkInMs)
+    ? 0
+    : Math.max(0, Math.ceil((checkInMs - nowMs) / MS_PER_DAY));
+  return {
+    kind: "pre-trip",
+    daysUntil,
+    nextFlight: {
+      ...hotel,
+      type: "hotel",
+      flightDepartureAirport: hotel.provider ?? "Hotel",
+      flightArrivalAirport: hotel.location ?? hotel.provider ?? "Hotel",
+    },
+  };
 }
 
 function hotelEndUtcMs(hotel: JourneyReservation): number {
@@ -319,6 +345,12 @@ export function computeJourneyPhase(args: {
       ) {
         continue;
       }
+      const suppressArrivalCoach = shouldSuppressHomeArrivalCoach({
+        flight,
+        hotels,
+        nowMs,
+      });
+      if (suppressArrivalCoach) continue;
       const landedMinutesAgo = Math.max(0, Math.round((nowMs - arrMs) / MS_PER_MIN));
       return { kind: "just-landed", flight, landedMinutesAgo };
     }
@@ -336,6 +368,11 @@ export function computeJourneyPhase(args: {
       daysUntil: daysUntilDeparture(depMs, nowMs),
       nextFlight,
     };
+  }
+
+  const activeHotel = activeHotelCoveringNow(hotels, nowMs);
+  if (activeHotel) {
+    return midStayPreTripFromHotel(activeHotel, nowMs);
   }
 
   const lastFlight = flights[flights.length - 1];

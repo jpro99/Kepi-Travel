@@ -22,6 +22,7 @@ import {
   shouldShowTravelOpsChrome,
   type ConnectionCalmStatus,
 } from "@/lib/travelAssistant/homeDayTruth";
+import { shouldSuppressHomeArrivalCoach } from "@/lib/travelAssistant/postArrivalGround";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { addIsoDays, buildTripCompleteness } from "@/lib/travelAssistant/tripNightCoverage";
 import { TripCompletenessBar } from "@/components/travelAssistant/TripCompletenessBar";
@@ -441,21 +442,50 @@ export function MissionControlView({
     return resolveArrivalHotelLabel(hotels, dateKey);
   }, [journeyPhase, reservations]);
 
+  const suppressArrivalCoach = useMemo(() => {
+    let flight: MissionControlReservation | null = null;
+    if (journeyPhase?.kind === "just-landed") {
+      flight = journeyPhase.flight as MissionControlReservation;
+    } else if (journeyPhase?.kind === "airborne") {
+      flight = journeyPhase.onFlight as MissionControlReservation;
+    }
+    return shouldSuppressHomeArrivalCoach({
+      flight,
+      hotels: reservations.filter((row) => row.type === "hotel"),
+      nowMs: Date.now(),
+      timezone: travelerTimezone ?? snap.tonightHotel?.timezone ?? null,
+      locationStatus,
+      landedMinutesAgo:
+        journeyPhase?.kind === "just-landed" ? journeyPhase.landedMinutesAgo : null,
+      stopRanges,
+    });
+  }, [
+    journeyPhase,
+    reservations,
+    travelerTimezone,
+    snap.tonightHotel?.timezone,
+    locationStatus,
+    stopRanges,
+  ]);
+
   const airportSpotlight = useMemo(
     () =>
-      resolveAirportSpotlightForHome({
-        journeyPhase,
-        locationStatus,
-        atAirport,
-        openAirportMode: snap.openAirportMode,
-        nextFlight: snap.nextFlight,
-        reservations,
-        liveDepartureGate: snap.nextFlight
-          ? liveStatus?.[snap.nextFlight.id]?.departureGate
-          : undefined,
-        hotelLabel: arrivalHotelLabel,
-      }),
+      suppressArrivalCoach
+        ? null
+        : resolveAirportSpotlightForHome({
+            journeyPhase,
+            locationStatus,
+            atAirport,
+            openAirportMode: snap.openAirportMode,
+            nextFlight: snap.nextFlight,
+            reservations,
+            liveDepartureGate: snap.nextFlight
+              ? liveStatus?.[snap.nextFlight.id]?.departureGate
+              : undefined,
+            hotelLabel: arrivalHotelLabel,
+          }),
     [
+      suppressArrivalCoach,
       journeyPhase,
       locationStatus,
       atAirport,
@@ -1204,6 +1234,12 @@ export function MissionControlView({
                   {todayCoach.nextTravelMove.headline}
                 </p>
                 <p className="mt-1 text-[14px] text-[#6E6E73]">{todayCoach.nextTravelMove.detail}</p>
+                {/no train ticket stored/i.test(todayCoach.nextTravelMove.detail) ? (
+                  <p className="mt-2 text-[13px] text-[#6E6E73]">
+                    We don&apos;t have a stored ticket yet — forward your Trenitalia PDF or confirmation
+                    email to your trip inbox and it will show here.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>

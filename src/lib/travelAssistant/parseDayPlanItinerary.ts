@@ -11,6 +11,7 @@ import {
   type ItineraryPlansData,
 } from "@/lib/travelAssistant/itineraryDayPlan";
 import { remapDayKeyIntoTripWindow } from "@/lib/travelAssistant/tripWindow";
+import { isOtaBookingConfirmation } from "@/lib/travelAssistant/stripOtaEmailFooter";
 
 export interface ParsedDayPlanDay {
   dateKey: string;
@@ -86,6 +87,7 @@ function parseMonthToken(raw: string): number | null {
 export function looksLikeDayPlanItinerary(text: string, subject = ""): boolean {
   const combined = `${subject}\n${text}`.trim();
   if (combined.length < 80) return false;
+  if (isOtaBookingConfirmation(combined, subject)) return false;
   const dayHits = [
     ...combined.matchAll(
       /\b(?:sept?|sep|september|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?)\.?\s+\d{1,2}\b/giu,

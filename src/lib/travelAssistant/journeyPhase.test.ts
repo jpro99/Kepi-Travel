@@ -7,6 +7,7 @@ import {
   shouldPromptAirportTransport,
   toUtcMs,
 } from "./journeyPhase";
+import { BARI_VENICE_SEP_12_RESERVATIONS } from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
 
 const honoluluTripFlights = [
   {
@@ -267,4 +268,28 @@ test("G49: before departure always pre-trip even if arrival string looks past in
   assert.notEqual(phase.kind, "just-landed");
   assert.notEqual(phase.kind, "airborne");
   assert.equal(phase.kind, "pre-trip");
+});
+
+test("G66: Venice mid-stay after VCE landing is pre-trip, not post-trip", () => {
+  const nowMs = Date.parse("2026-09-14T10:00:00Z");
+  const phase = computeJourneyPhase({
+    reservations: [...BARI_VENICE_SEP_12_RESERVATIONS],
+    nowMs,
+    tripDestination: "Venice",
+  });
+  assert.equal(phase.kind, "pre-trip");
+  assert.notEqual(phase.kind, "post-trip");
+  assert.notEqual(phase.kind, "just-landed");
+});
+
+test("G66: Venice mid-stay after VCE landing is pre-trip, not post-trip", () => {
+  const nowMs = Date.parse("2026-09-14T10:00:00Z");
+  const phase = computeJourneyPhase({
+    reservations: [...BARI_VENICE_SEP_12_RESERVATIONS],
+    nowMs,
+    tripDestination: "Venice",
+  });
+  assert.equal(phase.kind, "pre-trip");
+  assert.notEqual(phase.kind, "post-trip");
+  assert.notEqual(phase.kind, "just-landed");
 });
