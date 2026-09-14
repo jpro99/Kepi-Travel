@@ -3,7 +3,13 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-12 (G60 train phase ends at airport)
+Last updated: 2026-09-14 (G66 Venice mid-stay Home + Plan footer strip)
+
+## Decision 2026-09-14 — G66: Venice checkout-day Home honest-missing (Jeff CEO ACK)
+
+Mid-stay Venice (Airbnb checkout Sep 15) was showing `post-trip` / stale deplane coach instead of next-travel-day. **G66:** active hotel stay keeps `pre-trip`; `postArrivalGround` suppresses arrival coach when still mid-stay at metro (VCE→Venice). Home **Next travel day** shows `Venice → Cortina` with plain “No train ticket stored — forward Trenitalia…” when no Sep 15 train in trip store (Gmail scan: no Venice-departure Trenitalia; only Sep 12 J7HBM5 legs). **Forward ticket** CTA → review/inbox; **Train tickets** when PDF/sourceLinks exist. Plan: `stripOtaEmailFooter` blocks Airbnb App Store/footer junk bullets. SHA `d06cd279` on `main`.
+
+## Decision 2026-09-12 — G60: travel-day train phase must end (Jeff, BRI — 4th airport failure)
 
 ## Decision 2026-09-12 — G60: travel-day train phase must end (Jeff, BRI — 4th airport failure)
 
