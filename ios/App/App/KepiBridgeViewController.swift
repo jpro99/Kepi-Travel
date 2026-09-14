@@ -51,6 +51,8 @@ final class KepiBridgeViewController: CAPBridgeViewController {
         controller.add(KepiLocationBridge.shared, name: "kepiLocation")
         controller.removeScriptMessageHandler(forName: "kepiLiveActivity")
         controller.add(KepiLiveActivityBridge.shared, name: "kepiLiveActivity")
+        controller.removeScriptMessageHandler(forName: "kepiFocusFilter")
+        controller.add(KepiFocusFilterBridge.shared, name: "kepiFocusFilter")
     }
 
     private func showLoadingChrome() {

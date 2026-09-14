@@ -1,15 +1,51 @@
 import webpush, { type PushSubscription } from "web-push";
 import { logger } from "@/lib/logger";
 import { kvStoreDel, kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
+import type { FocusInterruptionLevel } from "@/lib/travelAssistant/travelFocusHonestyFilter";
+import type { TaggedDisruptionCharge } from "@/lib/travelAssistant/travelFocusHonestyFilter";
 
 const PUSH_SUBSCRIPTION_KEY = "push-sub";
 type NativePushPlatform = "ios" | "android";
 
-type PushNotificationPayload = {
+export type PushNotificationPayload = {
   title: string;
   body: string;
   url?: string;
+  /** Breakthrough B2 — Honesty Island / Focus filter metadata. */
+  disruptionId?: string;
+  filterCriteria?: string;
+  provenanceGrade?: "green" | "red";
+  interruptionLevel?: FocusInterruptionLevel;
+  focusFilterEligible?: boolean;
 };
+
+function serializePushPayload(payload: PushNotificationPayload): string {
+  return JSON.stringify({
+    title: payload.title,
+    body: payload.body,
+    url: payload.url ?? "/travel-assistant",
+    disruptionId: payload.disruptionId,
+    filterCriteria: payload.filterCriteria,
+    provenanceGrade: payload.provenanceGrade,
+    interruptionLevel: payload.interruptionLevel,
+    focusFilterEligible: payload.focusFilterEligible,
+  });
+}
+
+export function mergeDisruptionFocusMetadata(
+  payload: PushNotificationPayload,
+  charge: TaggedDisruptionCharge | null | undefined,
+): PushNotificationPayload {
+  if (!charge) return payload;
+  return {
+    ...payload,
+    disruptionId: charge.disruptionId,
+    filterCriteria: charge.filterCriteria || undefined,
+    provenanceGrade: charge.provenanceGrade,
+    interruptionLevel: charge.interruptionLevel,
+    focusFilterEligible: charge.focusFilterEligible,
+  };
+}
 
 export interface NativePushSubscription {
   channel: "native";
@@ -123,14 +159,7 @@ export async function sendPushNotification(
   }
 
   try {
-    await webPushClient.sendNotification(
-      subscription,
-      JSON.stringify({
-        title: payload.title,
-        body: payload.body,
-        url: payload.url ?? "/travel-assistant",
-      }),
-    );
+    await webPushClient.sendNotification(subscription, serializePushPayload(payload));
     return true;
   } catch (error) {
     const statusCode =
@@ -154,24 +183,38 @@ export async function sendGateChangeAlert(
   userId: string,
   flightNumber: string,
   newGate: string,
+  focusMetadata?: TaggedDisruptionCharge | null,
 ): Promise<boolean> {
-  return sendPushNotification(userId, {
-    title: `Gate changed for ${flightNumber}`,
-    body: `Your gate is now ${newGate}. Open Kepi to review departure timing.`,
-    url: "/travel-assistant?tab=book&bookView=flights",
-  });
+  return sendPushNotification(
+    userId,
+    mergeDisruptionFocusMetadata(
+      {
+        title: `Gate changed for ${flightNumber}`,
+        body: `Your gate is now ${newGate}. Open Kepi to review departure timing.`,
+        url: "/travel-assistant?tab=book&bookView=flights",
+      },
+      focusMetadata,
+    ),
+  );
 }
 
 export async function sendDelayAlert(
   userId: string,
   flightNumber: string,
   delayMinutes: number,
+  focusMetadata?: TaggedDisruptionCharge | null,
 ): Promise<boolean> {
-  return sendPushNotification(userId, {
-    title: `Delay alert for ${flightNumber}`,
-    body: `${flightNumber} is delayed by ${delayMinutes} minutes. Check updated timeline now.`,
-    url: "/travel-assistant?tab=book&bookView=flights",
-  });
+  return sendPushNotification(
+    userId,
+    mergeDisruptionFocusMetadata(
+      {
+        title: `Delay alert for ${flightNumber}`,
+        body: `${flightNumber} is delayed by ${delayMinutes} minutes. Check updated timeline now.`,
+        url: "/travel-assistant?tab=book&bookView=flights",
+      },
+      focusMetadata,
+    ),
+  );
 }
 
 export async function sendFamilyRallyNotification(

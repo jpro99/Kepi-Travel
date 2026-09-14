@@ -3,10 +3,16 @@ import { kvStoreGet, kvStoreSet } from "@/lib/travelAssistant/kvStore";
 import { logger } from "@/lib/logger";
 import {
   hasPushSubscription,
+  mergeDisruptionFocusMetadata,
   sendDelayAlert,
   sendGateChangeAlert,
   sendPushNotification,
 } from "@/lib/travelAssistant/pushNotificationService";
+import type { FlightFactProvenance } from "@/lib/travelAssistant/dayOfDoorProvenance";
+import {
+  tagDisruptionCharge,
+  type TaggedDisruptionCharge,
+} from "@/lib/travelAssistant/travelFocusHonestyFilter";
 
 const SNAPSHOT_KEY_PREFIX = "flight-status-push-snapshot:";
 
@@ -29,6 +35,52 @@ function normalizeGate(gate: string | undefined | null): string {
 
 function normalizeStatus(status: string | undefined | null): string {
   return (status ?? "unknown").trim().toLowerCase();
+}
+
+function resolvePushProvenance(flightStatus: string): FlightFactProvenance {
+  const status = normalizeStatus(flightStatus);
+  if (status.includes("cancel") || status.includes("divert") || status.includes("gate")) {
+    return "ALERT_PUSH_STRING";
+  }
+  if (status.includes("delay")) {
+    return "AIRPORT_FIDS_TEXT";
+  }
+  return "UNVERIFIED";
+}
+
+function buildGateChangeCharge(
+  flightNumber: string,
+  flightDate: string,
+  provenance: FlightFactProvenance,
+): TaggedDisruptionCharge {
+  return tagDisruptionCharge({
+    kind: "official-gate-change",
+    provenance,
+    flightNumber,
+    flightDate,
+  });
+}
+
+function buildCancelCharge(
+  flightNumber: string,
+  flightDate: string,
+  provenance: FlightFactProvenance,
+): TaggedDisruptionCharge {
+  return tagDisruptionCharge({
+    kind: "cancel",
+    provenance,
+    flightNumber,
+    flightDate,
+  });
+}
+
+function buildSoftDelayCharge(flightNumber: string, flightDate: string): TaggedDisruptionCharge {
+  return tagDisruptionCharge({
+    kind: "soft-status",
+    provenance: "UNVERIFIED",
+    flightNumber,
+    flightDate,
+  });
 }
 
 export async function maybeSendFlightStatusPushAlerts(
@@ -79,7 +131,12 @@ export async function maybeSendFlightStatusPushAlerts(
     next.departureGate &&
     previous.departureGate !== next.departureGate
   ) {
-    const ok = await sendGateChangeAlert(userId, flightNumber, next.departureGate);
+    const gateCharge = buildGateChangeCharge(
+      flightNumber,
+      flightDate,
+      resolvePushProvenance("gate-change"),
+    );
+    const ok = await sendGateChangeAlert(userId, flightNumber, next.departureGate, gateCharge);
     if (ok) sent += 1;
   }
 
@@ -92,7 +149,8 @@ export async function maybeSendFlightStatusPushAlerts(
     nextDelay >= 10;
 
   if (delayIncreased || becameDelayed) {
-    const ok = await sendDelayAlert(userId, flightNumber, Math.max(nextDelay, 10));
+    const delayCharge = buildSoftDelayCharge(flightNumber, flightDate);
+    const ok = await sendDelayAlert(userId, flightNumber, Math.max(nextDelay, 10), delayCharge);
     if (ok) sent += 1;
   }
 
@@ -101,14 +159,25 @@ export async function maybeSendFlightStatusPushAlerts(
     !(previous.flightStatus.includes("cancel") || previous.flightStatus.includes("divert"));
 
   if (cancelledNow) {
-    const ok = await sendPushNotification(userId, {
-      title: `${flightNumber} update`,
-      body:
-        next.flightStatus.includes("cancel")
-          ? `${flightNumber} appears cancelled. Open Kepi for next steps.`
-          : `${flightNumber} was diverted. Check your airline for updates.`,
-      url: "/travel-assistant?tab=book&bookView=flights",
-    });
+    const cancelCharge = buildCancelCharge(
+      flightNumber,
+      flightDate,
+      resolvePushProvenance(next.flightStatus),
+    );
+    const ok = await sendPushNotification(
+      userId,
+      mergeDisruptionFocusMetadata(
+        {
+          title: `${flightNumber} update`,
+          body:
+            next.flightStatus.includes("cancel")
+              ? `${flightNumber} appears cancelled. Open Kepi for next steps.`
+              : `${flightNumber} was diverted. Check your airline for updates.`,
+          url: "/travel-assistant?tab=book&bookView=flights",
+        },
+        cancelCharge,
+      ),
+    );
     if (ok) sent += 1;
   }
 
