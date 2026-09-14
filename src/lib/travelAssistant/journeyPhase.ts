@@ -26,6 +26,7 @@ export interface JourneyReservation {
   flightNumber?: string;
   flightStatus?: string;
   checkOutDate?: string;
+  location?: string;
 }
 
 export type JourneyPhase =
