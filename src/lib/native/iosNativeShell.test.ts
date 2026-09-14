@@ -7,6 +7,7 @@ import {
   IOS_CAPACITOR_SPM_GIT,
   IOS_DISPLAY_NAME,
   IOS_LIVE_ACTIVITY_HANDLER,
+  IOS_FOCUS_FILTER_HANDLER,
   IOS_SPM_TOOLS_VERSION,
   IOS_NATIVE_LOCATION_URL,
   IOS_PRODUCTION_URL,
@@ -163,4 +164,30 @@ test("F18 ActivityKit Live Activity bridge ships in iOS shell", () => {
   assert.match(liveBridge, /showCountdown/);
   assert.match(webBridge, /web-honest-fallback/);
   assert.match(webBridge, /provenance-skip/);
+});
+
+test("G66 Travel Focus honesty filter ships SetFocusFilterIntent + kepiFocusFilter bridge", () => {
+  const vc = readSrc("ios/App/App/KepiBridgeViewController.swift");
+  const focusBridge = readSrc("ios/App/App/KepiFocusFilterBridge.swift");
+  const webBridge = readSrc("src/lib/native/focusFilterBridge.ts");
+  const filter = readSrc("src/lib/travelAssistant/travelFocusHonestyFilter.ts");
+  const experiment = readSrc("src/lib/travelAssistant/travelFocusExperiment.ts");
+  const pbx = readSrc("ios/App/App.xcodeproj/project.pbxproj");
+  const shell = readSrc("src/lib/native/iosNativeShell.ts");
+  assert.equal(IOS_FOCUS_FILTER_HANDLER, "kepiFocusFilter");
+  assert.match(shell, /IOS_FOCUS_FILTER_HANDLER = "kepiFocusFilter"/);
+  assert.match(vc, /kepiFocusFilter/);
+  assert.match(vc, /KepiFocusFilterBridge/);
+  assert.match(focusBridge, /SetFocusFilterIntent/);
+  assert.match(focusBridge, /notificationFilterPredicate/);
+  assert.match(focusBridge, /KepiTravelFocusFilterIntent/);
+  assert.match(focusBridge, /KepiSleepFocusFilterIntent/);
+  assert.match(webBridge, /syncNativeFocusFilterCriteria/);
+  assert.match(webBridge, /stageNativeFocusExperiment/);
+  assert.match(filter, /time-sensitive/);
+  assert.match(filter, /soft-status/);
+  assert.match(experiment, /green-charge/);
+  assert.match(experiment, /soft-status-only/);
+  assert.match(pbx, /KepiFocusFilterBridge\.swift in Sources/);
+  assert.match(pbx, /KepiLiveActivityBridge\.swift in Sources/);
 });

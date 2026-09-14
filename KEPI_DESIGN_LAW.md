@@ -257,6 +257,11 @@ On train+flight days, Home/Map must not show train-first copy all day. `areTrave
 **G63 — In flight, show landing airport not origin**  
 When `journeyPhase` is `airborne`, coach mode, map IATA, Home spotlight, and Airport Mode must surface the **arrival** airport (VCE) and tonight's stay — not the departure airport (BRI). `deriveNavigatorCoachModeForFlight` returns `arrive` between scheduled dep and arr; navigator pins `journeyPhase.onFlight`.
 
+**G66 — Travel Focus honesty filter (Breakthrough B2)**  
+iOS `SetFocusFilterIntent` for Travel/Sleep Focus: `filterCriteria` = green-provenance disruption IDs only (`SCHEDULED_ITINERARY` | `AIRPORT_FIDS_TEXT` | `ALERT_PUSH_STRING`). `interruptionLevel.timeSensitive` ONLY on green charges: cancel, official gate change, gospel-node missed-connection RISK (booked tight/impossible from itinerary — never invented gates). Soft status (delay chatter without green charge) stays **SILENT** under Travel Focus. Native bridge: `kepiFocusFilter` WK handler + `KepiTravelFocusFilterIntent` NSPredicate `SELF IN %@`. Android Focus out of scope. Experiment arms: (A) green cancel/gate-change vs (B) soft-status-only for phone PASS.
+
+**Test:** `src/lib/travelAssistant/travelFocusHonestyFilter.test.ts`, `src/lib/native/iosNativeShell.test.ts`
+
 **G62 — Where am I never uses tonight's arrival city before you land**  
 Help "where am I" must prefer GPS airport campus, travel-day outbound flight, and `locationStatus` over a same-day check-in stay. Sep 12 BRI→VCE with Venice Airbnb check-in today still answers **Bari** while delayed at BRI — not Venice. Same-day arrival hotels apply only after `just-landed` or GPS at the arrival airport.
 
@@ -1182,6 +1187,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G61 | `src/lib/support/supportChatShell.test.ts` |
 | G62 | `src/lib/support/tripHelpAnswer.test.ts` |
 | G63 | `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
+| G66 | `src/lib/travelAssistant/travelFocusHonestyFilter.test.ts`, `src/lib/native/iosNativeShell.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
 | D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
 | D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |
