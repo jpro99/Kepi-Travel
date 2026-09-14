@@ -257,6 +257,11 @@ On train+flight days, Home/Map must not show train-first copy all day. `areTrave
 **G63 — In flight, show landing airport not origin**  
 When `journeyPhase` is `airborne`, coach mode, map IATA, Home spotlight, and Airport Mode must surface the **arrival** airport (VCE) and tonight's stay — not the departure airport (BRI). `deriveNavigatorCoachModeForFlight` returns `arrive` between scheduled dep and arr; navigator pins `journeyPhase.onFlight`.
 
+**G65 — FCO gospel connection walk (package + official text only)**  
+Same-airport connections at FCO use ordered coach nodes from signed factory package GeoJSON/nodes ∪ curated official procedure text (`getAirportNav`) — never Flighty-style predicted gates. Missing outbound gate shows **Unknown** and names the hole. Passport/eGate copy only when ADR-published text exists (EU/EEA lane via `customsTip`). Schengen domestic connectors skip passport; booked gate strings join package nodes when longest-prefix resolves.
+
+**Test:** `src/lib/travelAssistant/fcoGospelConnectionWalk.test.ts`, `src/lib/travelAssistant/connectionPlaybook.test.ts`
+
 **G62 — Where am I never uses tonight's arrival city before you land**  
 Help "where am I" must prefer GPS airport campus, travel-day outbound flight, and `locationStatus` over a same-day check-in stay. Sep 12 BRI→VCE with Venice Airbnb check-in today still answers **Bari** while delayed at BRI — not Venice. Same-day arrival hotels apply only after `just-landed` or GPS at the arrival airport.
 
@@ -1182,6 +1187,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | G61 | `src/lib/support/supportChatShell.test.ts` |
 | G62 | `src/lib/support/tripHelpAnswer.test.ts` |
 | G63 | `src/lib/travelAssistant/useActiveFlight.test.ts`, `src/lib/travelAssistant/airportDayCoach.test.ts` |
+| G65 | `src/lib/travelAssistant/fcoGospelConnectionWalk.test.ts`, `src/lib/travelAssistant/connectionPlaybook.test.ts` |
 | D10 | `src/lib/travelAssistant/forwardedReservationGate.test.ts` |
 | D10 | `src/lib/travelAssistant/drainForwardReviewQueue.test.ts` |
 | D11 | `src/lib/travelAssistant/reservationPlausibility.test.ts` |

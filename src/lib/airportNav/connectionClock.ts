@@ -22,6 +22,10 @@ import {
   type ConnectionPlaybook,
   type ConnectionPlaybookStep,
 } from "@/lib/travelAssistant/connectionPlaybook";
+import {
+  buildFcoGospelConnectionWalk,
+  estimateFcoConnectionWalkMinutes,
+} from "@/lib/travelAssistant/fcoGospelConnectionWalk";
 import type { TransportRouteReservation } from "@/lib/travelAssistant/tripTransportRoute";
 import { buildTripTransportRoute } from "@/lib/travelAssistant/tripTransportRoute";
 import { toUtcMs } from "@/lib/travelAssistant/journeyPhase";
@@ -331,7 +335,7 @@ export function buildSeaConnectionSteps(input: {
 }
 
 function totalRequiredMinutes(
-  steps: readonly SeaConnectionStep[],
+  steps: readonly { id: string; minutes?: number | null }[],
   walkKnown: boolean,
 ): { total: number; honestyParts: string[] } {
   let total = 0;
@@ -420,14 +424,19 @@ export function computeConnectionGateConfidence(
   const walk =
     input.walkMinutes !== undefined
       ? { minutes: input.walkMinutes, known: input.walkKnown ?? input.walkMinutes != null }
-      : estimateSeaConnectionWalkMinutes({
-          arrivalGate: ctx.inbound.arrivalGate,
-          departureGate: ctx.outbound.departureGate,
-          arrivalTerminal: ctx.inbound.arrivalTerminal,
-          departureTerminal: ctx.outbound.departureTerminal,
-          throughSecurity: input.throughSecurity,
-          credentials: input.credentials,
-        });
+      : hub === "FCO"
+        ? estimateFcoConnectionWalkMinutes({
+            arrivalGate: ctx.inbound.arrivalGate,
+            departureGate: ctx.outbound.departureGate,
+          })
+        : estimateSeaConnectionWalkMinutes({
+            arrivalGate: ctx.inbound.arrivalGate,
+            departureGate: ctx.outbound.departureGate,
+            arrivalTerminal: ctx.inbound.arrivalTerminal,
+            departureTerminal: ctx.outbound.departureTerminal,
+            throughSecurity: input.throughSecurity,
+            credentials: input.credentials,
+          });
 
   const seaSteps = hub === "SEA" ? buildSeaConnectionSteps({
     ctx,
@@ -437,16 +446,31 @@ export function computeConnectionGateConfidence(
     credentials: input.credentials,
   }) : [];
 
+  const fcoSteps =
+    hub === "FCO"
+      ? buildFcoGospelConnectionWalk({
+          ctx,
+          gateSources: { bookedGate: ctx.outbound.departureGate, departureIata: hub },
+          walkMinutes: walk.minutes,
+          walkKnown: walk.known,
+        })
+      : [];
+
+  const hubSteps = seaSteps.length > 0 ? seaSteps : fcoSteps;
+
   const connIdx = resolveConnectionSpotlightIndex(ctx.playbook, {
     locationStatus: input.locationStatus,
     minutesSinceLanding: input.landedMinutesAgo,
   });
   const playbookStep = ctx.playbook.steps[connIdx] ?? ctx.playbook.steps[0] ?? null;
-  const seaStep = seaSteps.find((s) => s.id === playbookStep?.id) ?? seaSteps[0] ?? null;
-  const next = resolveConnectionNextMove(hub, seaStep ?? playbookStep);
+  const hubStep =
+    hubSteps.find((s) => s.id === playbookStep?.id) ??
+    hubSteps[0] ??
+    null;
+  const next = resolveConnectionNextMove(hub, hubStep ?? playbookStep);
 
   const { total: requiredMin, honestyParts } = totalRequiredMinutes(
-    seaSteps.length > 0 ? seaSteps : [{ id: "deplane", icon: "🛬", text: "", minutes: DEPLANE_BUFFER_MIN }],
+    hubSteps.length > 0 ? hubSteps : [{ id: "deplane", icon: "🛬", text: "", minutes: DEPLANE_BUFFER_MIN }],
     walk.known,
   );
 
@@ -482,8 +506,8 @@ export function computeConnectionGateConfidence(
 
   if (landed) {
     const elapsedSinceLanding = input.landedMinutesAgo!;
-    const remainingIdx = seaSteps.findIndex((s) => s.id === (seaStep?.id ?? "deplane"));
-    const remainingSteps = remainingIdx >= 0 ? seaSteps.slice(remainingIdx) : seaSteps;
+    const remainingIdx = hubSteps.findIndex((s) => s.id === (hubStep?.id ?? "deplane"));
+    const remainingSteps = remainingIdx >= 0 ? hubSteps.slice(remainingIdx) : hubSteps;
     const remainingRequired = totalRequiredMinutes(remainingSteps, walk.known).total;
     spareMinutes = clampSpare(minutesToOutboundBoardingClose - remainingRequired - CONNECTION_SLACK_MIN);
   } else {
