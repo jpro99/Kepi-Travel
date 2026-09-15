@@ -3,7 +3,8 @@
  * a successful live status lookup that reports en-route.
  */
 
-import type { JourneyPhase, JourneyReservation } from "@/lib/travelAssistant/journeyPhase";
+import { formatBookedArrivalDetail } from "@/lib/travelAssistant/bookedFlightArrival";
+import type { JourneyPhase } from "@/lib/travelAssistant/journeyPhase";
 
 export type AirborneLiveStatusInput = {
   flightStatus?: string;
@@ -33,13 +34,6 @@ export interface AirborneHeroCopy {
   title: string;
   detail: string | null;
   isLiveClaim: boolean;
-}
-
-function formatBookedArrivalDetail(flight: JourneyReservation): string | null {
-  const arr = flight.flightArrivalTime?.trim();
-  if (!arr) return null;
-  const timePart = arr.includes(" ") ? arr.split(/\s+/u).pop() : arr;
-  return timePart ? `Scheduled arrival ${timePart}` : null;
 }
 
 /**
