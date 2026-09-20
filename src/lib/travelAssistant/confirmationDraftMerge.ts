@@ -1,4 +1,5 @@
 import { extractFlightLegsFromEmailBody } from "@/lib/travelAssistant/emailForwardParser";
+import { extractRailTicketLegs } from "@/lib/travelAssistant/railTicketExtract";
 import { extractHotelDraftsFromDocumentText } from "@/lib/travelAssistant/confirmationHotelExtract";
 import { preparePdfTextForParsing } from "@/lib/travelAssistant/pdfTextExtract";
 import { parseCashUsdNearBooking } from "@/lib/travelAssistant/parseReservationCashUsd";
@@ -41,6 +42,25 @@ function mergeFlightDraft(
     flightArrivalAirport: primary.flightArrivalAirport.trim() || secondary.flightArrivalAirport,
     quotedPriceUsd: primary.quotedPriceUsd ?? secondary.quotedPriceUsd,
   };
+}
+
+function regexTrainDraftsFromDocumentText(documentText: string): ScannedReservationDraft[] {
+  const prepared = preparePdfTextForParsing(documentText);
+  return extractRailTicketLegs(prepared).map((leg) =>
+    buildScannedReservationDraft({
+      type: "train",
+      title: leg.title,
+      provider: leg.provider || "Rail",
+      localTime: leg.localTime,
+      timezone: leg.timezone || "Europe/Rome",
+      location: leg.location,
+      confirmationCode: leg.confirmationCode,
+      notes: leg.notes,
+      trainNumber: leg.trainNumber,
+      trainPlatform: leg.trainPlatform,
+      trainSeat: leg.trainSeat,
+    }),
+  );
 }
 
 function regexLegsToDrafts(documentText: string): ScannedReservationDraft[] {
@@ -108,6 +128,9 @@ function isUsableDraft(draft: ScannedReservationDraft): boolean {
   ) {
     return true;
   }
+  if (draft.type === "train" && (draft.trainNumber.trim() || draft.location.trim())) {
+    return true;
+  }
   return false;
 }
 
@@ -125,8 +148,9 @@ export function mergeConfirmationDrafts(
   const referenceDate = options?.referenceDate ?? new Date();
   const regexFlightDrafts = regexLegsToDrafts(documentText);
   const regexHotelDrafts = extractHotelDraftsFromDocumentText(documentText);
+  const regexTrainDrafts = regexTrainDraftsFromDocumentText(documentText);
 
-  if (regexFlightDrafts.length === 0 && regexHotelDrafts.length === 0) {
+  if (regexFlightDrafts.length === 0 && regexHotelDrafts.length === 0 && regexTrainDrafts.length === 0) {
     return enrichDraftsWithDocumentPricing(
       applyTravelDateCorrections(inferMissingYears(aiDrafts.filter(isUsableDraft)), referenceDate),
       documentText,
@@ -156,11 +180,16 @@ export function mergeConfirmationDrafts(
     aiHotels.length === 0 && regexHotelDrafts.length > 0
       ? regexHotelDrafts
       : [...regexHotelDrafts, ...aiHotels];
-  const otherNonFlights = nonFlights.filter((draft) => draft.type !== "hotel");
+  const aiTrains = nonFlights.filter((draft) => draft.type === "train");
+  const trains =
+    aiTrains.length === 0 && regexTrainDrafts.length > 0
+      ? regexTrainDrafts
+      : [...regexTrainDrafts, ...aiTrains];
+  const otherNonFlights = nonFlights.filter((draft) => draft.type !== "hotel" && draft.type !== "train");
 
   const combined = applyTravelDateCorrections(
     enrichDraftsWithDocumentPricing(
-      inferMissingYears([...flights, ...hotels, ...otherNonFlights]),
+      inferMissingYears([...flights, ...hotels, ...trains, ...otherNonFlights]),
       documentText,
     ),
     referenceDate,

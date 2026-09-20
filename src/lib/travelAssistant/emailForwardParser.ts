@@ -203,7 +203,9 @@ export type ForwardedReservationField =
   | "arrivalAirport"
   | "arrivalTime"
   | "checkOutDate"
-  | "trainNumber";
+  | "trainNumber"
+  | "trainPlatform"
+  | "trainSeat";
 export type ForwardedParsingStatus = "auto-parsed" | "needs-review" | "needs-user-input";
 export type ForwardedConfidenceLevel = "high" | "medium" | "low";
 
@@ -236,6 +238,8 @@ export interface ForwardedReservationDraft {
   arrivalAirport?: string;
   arrivalTime?: string;
   trainNumber?: string;
+  trainPlatform?: string;
+  trainSeat?: string;
 }
 
 export interface ForwardedEmailParseResult {
@@ -1434,6 +1438,12 @@ function buildRegexCandidates(input: {
     if (railFacts.trainNumber) {
       candidates.trainNumber = { value: railFacts.trainNumber, confidence: 0.9, source: "regex" };
     }
+    if (railFacts.trainPlatform) {
+      candidates.trainPlatform = { value: railFacts.trainPlatform, confidence: 0.86, source: "regex" };
+    }
+    if (railFacts.trainSeat) {
+      candidates.trainSeat = { value: railFacts.trainSeat, confidence: 0.86, source: "regex" };
+    }
   }
 
   const reservationType = normalizeType(candidates.type?.value ?? "") ?? undefined;
@@ -1688,6 +1698,14 @@ export function buildDraft(candidates: CandidateMap, parserNotes: string[]): For
       typeValue === "train"
         ? normalizeWhitespace(candidates.trainNumber?.value ?? "")
         : "",
+    trainPlatform:
+      typeValue === "train"
+        ? normalizeWhitespace(candidates.trainPlatform?.value ?? "")
+        : "",
+    trainSeat:
+      typeValue === "train"
+        ? normalizeWhitespace(candidates.trainSeat?.value ?? "")
+        : "",
   };
 }
 
@@ -1792,6 +1810,8 @@ function railLegToCandidateMap(facts: RailTicketFacts): CandidateMap {
     timezone: { value: facts.timezone, confidence: 0.8, source: "regex" },
     notes: { value: facts.notes, confidence: 0.7, source: "regex" },
     trainNumber: { value: facts.trainNumber, confidence: 0.9, source: "regex" },
+    trainPlatform: { value: facts.trainPlatform, confidence: 0.86, source: "regex" },
+    trainSeat: { value: facts.trainSeat, confidence: 0.86, source: "regex" },
   };
   return map;
 }

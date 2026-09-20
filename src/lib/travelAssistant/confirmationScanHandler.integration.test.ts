@@ -47,6 +47,29 @@ test("handleConfirmationScanUpload imports hotel confirmation without AI", async
   assert.match(payload.drafts?.[0]?.title ?? "", /Hyatt/i);
 });
 
+test("handleConfirmationScanUpload imports ÖBB Bolzano→Munich text without AI", async () => {
+  const { OBB_COMBINED_PDF_TEXT } = await import("@/lib/travelAssistant/fixtures/obbBolzanoMunichSep20Fixture");
+  const file = new File([OBB_COMBINED_PDF_TEXT], "OEBBTicket.txt", { type: "text/plain" });
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const request = new Request("http://localhost/api/travel-updates/ticket-scan", {
+    method: "POST",
+    body: formData,
+  });
+
+  const response = await handleConfirmationScanUpload(request, { anthropicApiKey: "" });
+  assert.equal(response.status, 200);
+  const payload = (await response.json()) as {
+    drafts?: Array<{ type: string; trainNumber?: string; trainSeat?: string; localTime?: string }>;
+  };
+  const train = payload.drafts?.find((draft) => draft.type === "train");
+  assert.ok(train);
+  assert.equal(train?.trainNumber, "86");
+  assert.equal(train?.localTime, "2026-09-20 12:34");
+  assert.match(train?.trainSeat ?? "", /267\/63/);
+});
+
 test("handleConfirmationScanUpload imports Bali html fixture without AI", async () => {
   const fixturePath = join(dirname(fileURLToPath(import.meta.url)), "__fixtures__", "baliVacationFlightsAsHtml.pdf");
   const bytes = readFileSync(fixturePath);

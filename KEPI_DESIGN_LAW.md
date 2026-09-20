@@ -928,6 +928,11 @@ Trenitalia / Italo PDFs print `13/09/2026`, Partenza/Arrivo, station names, bina
 
 **Test:** `src/lib/travelAssistant/travelAssistantPageAnalytics.test.ts`
 
+**I61 — Cross-border rail shows train number, platform, seat**  
+ÖBB / Deutsche Bahn tickets (Bolzano → München, Gleis, Wagen/Platz) must parse into train number, platform, and seat — not a generic “Train” card with route only. ÖBB PDFs pair **FAHRSCHEIN** (flexible, ohne Zugbindung) with **RESERVIERUNG** (ZUG, Wagen, Sitzplätze) — merge both pages; platform is often absent on the ticket (honest “Platform at station” chip). PDF scan validation must accept rail tickets, not only flights/hotels. Confirmations untouched.
+
+**Test:** `src/lib/travelAssistant/railTicketExtract.test.ts`, `src/lib/travelAssistant/trainReservationFields.test.ts`, `src/lib/travelAssistant/confirmationDraftMerge.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -1179,6 +1184,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | I56 | `src/lib/pwa/recoverStaleClientBundle.test.ts` |
 | I57 | `src/lib/travelAssistant/bookedHopCoverage.test.ts` |
 | I58 | `src/lib/travelAssistant/railTicketExtract.test.ts` |
+| I61 | `src/lib/travelAssistant/railTicketExtract.test.ts`, `src/lib/travelAssistant/trainReservationFields.test.ts`, `src/lib/travelAssistant/confirmationDraftMerge.test.ts` |
 | I59 | `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | I60 | `src/lib/travelAssistant/travelAssistantPageAnalytics.test.ts` |
 | I61 | `src/lib/pwa/recoverStaleClientBundle.test.ts` |

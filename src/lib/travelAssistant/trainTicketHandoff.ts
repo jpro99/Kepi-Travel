@@ -4,6 +4,7 @@
  */
 
 import { isSafeExternalHttpsUrl } from "@/lib/travelAssistant/checkInHandoff";
+import { resolveTrainFields } from "@/lib/travelAssistant/trainReservationFields";
 import { isPlannedReservation } from "@/lib/travelAssistant/plannedReservationMatch";
 import {
   buildReservationQuickLinks,
@@ -16,6 +17,11 @@ export interface TrainTicketSourceReservation extends ReservationLinkInput {
   id: string;
   title?: string;
   trainNumber?: string;
+  trainPlatform?: string;
+  trainSeat?: string;
+  notes?: string;
+  originalEmailText?: string;
+  sourceEmailSubject?: string;
   timezone?: string | null;
   plannedOnly?: boolean;
   boardingPassUrl?: string;
@@ -97,8 +103,11 @@ function trainHeadline(reservation: TrainTicketSourceReservation): string {
 function trainDetail(reservation: TrainTicketSourceReservation): string {
   const time = formatTrainTime(reservation.localTime);
   const code = reservation.confirmationCode?.trim();
+  const fields = resolveTrainFields(reservation);
   const bits: string[] = [];
   if (time) bits.push(`Departs ${time}`);
+  if (fields.trainPlatform) bits.push(`Platform ${fields.trainPlatform}`);
+  if (fields.trainSeat) bits.push(`Seat ${fields.trainSeat}`);
   if (code) bits.push(`Confirmation ${code}`);
   return bits.join(" · ") || "Your booked train for today.";
 }

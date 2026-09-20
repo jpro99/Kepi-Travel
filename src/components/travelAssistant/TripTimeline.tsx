@@ -17,6 +17,7 @@ import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthrough
 import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
 import type { ReservationLinkInput } from "@/lib/travelAssistant/reservationLinks";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
+import { resolveTrainFields, trainPlatformDisplayLabel } from "@/lib/travelAssistant/trainReservationFields";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,11 @@ interface TimelineReservation extends ReservationLinkInput {
   quotedPointsMiles?: number;
   pointsProgram?: string;
   flightAirline?: string;
+  trainNumber?: string;
+  trainPlatform?: string;
+  trainSeat?: string;
+  originalEmailText?: string;
+  sourceEmailSubject?: string;
 }
 
 interface TripTimelineProps {
@@ -190,6 +196,8 @@ function ReservationCard({
   const cfg = typeConfig(reservation.type);
   const isFlight = reservation.type === "flight";
   const isHotel = reservation.type === "hotel";
+  const isTrain = reservation.type === "train";
+  const trainFields = isTrain ? resolveTrainFields(reservation) : null;
   const isPlanned = isPlannedReservation(reservation);
   const missingPrice = reservationMissingPrice(reservation);
   const showScheduleTime =
@@ -299,6 +307,58 @@ function ReservationCard({
                 <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">ON TIME</span>
               ) : reservation.flightOnTime === false ? (
                 <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-400">DELAYED</span>
+              ) : null}
+            </div>
+          </>
+        ) : isTrain && trainFields ? (
+          <>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className={`text-2xl font-black tracking-tight ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>
+                  {trainFields.fromStation || reservation.location.split("→")[0]?.trim() || "From"}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {showScheduleTime ? formatTime(reservation.localTime) : "Departure time"}
+                </p>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-1">
+                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : isPlanned ? "bg-amber-400/60" : "bg-emerald-400/60"}`} />
+                  <span className={isPast ? "text-slate-500" : isPlanned ? "text-amber-300" : "text-emerald-300"}>🚆</span>
+                  <div className={`h-px w-8 ${isPast ? "bg-slate-600" : isPlanned ? "bg-amber-400/60" : "bg-emerald-400/60"}`} />
+                </div>
+                {trainFields.trainNumber ? (
+                  <span className={`text-[10px] font-bold tracking-widest ${isPast ? "text-slate-500" : isPlanned ? "text-amber-400" : "text-emerald-400"}`}>
+                    {trainFields.trainNumber}
+                  </span>
+                ) : isPlanned ? (
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">Planned</span>
+                ) : null}
+              </div>
+              <div className="min-w-0 flex-1 text-right">
+                <p className={`text-2xl font-black tracking-tight ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>
+                  {trainFields.toStation || reservation.location.split("→")[1]?.trim() || "To"}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {reservation.provider || "Rail"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-xs">
+              {trainPlatformDisplayLabel(trainFields, reservation.notes) ? (
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                  {trainPlatformDisplayLabel(trainFields, reservation.notes)}
+                </span>
+              ) : null}
+              {trainFields.trainSeat ? (
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                  Seat {trainFields.trainSeat}
+                </span>
+              ) : null}
+              {reservation.confirmationCode ? (
+                <span className="ml-auto font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                  {reservation.confirmationCode}
+                </span>
               ) : null}
             </div>
           </>

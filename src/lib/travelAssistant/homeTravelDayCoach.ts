@@ -20,6 +20,7 @@ import {
   type HomeStayReservation,
   travelerTodayKey,
 } from "@/lib/travelAssistant/homeTodayCoach";
+import { resolveTrainFields } from "@/lib/travelAssistant/trainReservationFields";
 import {
   buildTrainTicketHandoffContent,
   isBookedTrainReservation,
@@ -271,8 +272,12 @@ export function buildTravelDayWalkthroughSteps(input: {
     const route = train.location?.trim() || "";
     const dep = formatLocalTime(train.localTime);
     const paxNote = formatPassengerTicketNote(handoff);
+    const trainFields = resolveTrainFields(train);
     const detailParts = [
       dep ? `Departs ${dep}` : null,
+      trainFields.trainNumber ? `Train ${trainFields.trainNumber}` : null,
+      trainFields.trainPlatform ? `Platform ${trainFields.trainPlatform}` : null,
+      trainFields.trainSeat ? `Seat ${trainFields.trainSeat}` : null,
       train.confirmationCode?.trim() ? `Confirmation ${train.confirmationCode.trim()}` : null,
       paxNote,
     ].filter(Boolean);

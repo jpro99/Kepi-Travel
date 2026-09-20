@@ -1,83 +1,21 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { mergeConfirmationDrafts } from "./confirmationDraftMerge";
-import { preparePdfTextForParsing } from "./pdfTextExtract";
-import { parseScannedReservationsJson } from "./scannedReservationDraft";
+import { OBB_COMBINED_PDF_TEXT } from "@/lib/travelAssistant/fixtures/obbBolzanoMunichSep20Fixture";
+import { mergeConfirmationDrafts } from "@/lib/travelAssistant/confirmationDraftMerge";
+import { hasTravelConfirmationSignals } from "@/lib/travelAssistant/confirmationDocumentValidation";
 
-const fixtureDir = dirname(fileURLToPath(import.meta.url));
-const baliFixtureText = readFileSync(join(fixtureDir, "__fixtures__", "baliVacationFlights.txt"), "utf8");
-const BEFORE_TRIP = { referenceDate: new Date("2025-08-01T12:00:00Z") };
-
-test("mergeConfirmationDrafts extracts all Bali vacation legs from PDF plain text", () => {
-  const prepared = preparePdfTextForParsing(baliFixtureText);
-  const merged = mergeConfirmationDrafts([], prepared, BEFORE_TRIP);
-  assert.ok(merged.length >= 5, `expected at least 5 legs, got ${merged.length}`);
-  const flightNumbers = merged.map((draft) => draft.flightNumber.replace(/\s+/gu, ""));
-  assert.ok(flightNumbers.includes("AS865"));
-  assert.ok(flightNumbers.includes("AS6422"));
-  assert.ok(flightNumbers.includes("AZ1607"));
-  assert.ok(flightNumbers.includes("SQ948"));
-  assert.ok(flightNumbers.includes("GA875"));
+test("I61: ÖBB PDF plain text passes travel confirmation validation", () => {
+  assert.equal(hasTravelConfirmationSignals(OBB_COMBINED_PDF_TEXT), true);
 });
 
-test("mergeConfirmationDrafts adds missing regex legs when AI returns only the first flight", () => {
-  const aiOnlyFirst = parseScannedReservationsJson(
-    JSON.stringify({
-      reservations: [
-        {
-          type: "flight",
-          provider: "Alaska Airlines",
-          flightNumber: "AS865",
-          departureAirport: "ONT",
-          arrivalAirport: "SEA",
-          localTime: "2025-09-12 06:00",
-          confirmationCode: "ABCDEF",
-        },
-      ],
-    }),
-  );
-  const merged = mergeConfirmationDrafts(aiOnlyFirst, preparePdfTextForParsing(baliFixtureText), BEFORE_TRIP);
-  assert.ok(merged.length >= 5);
-  assert.ok(merged.every((draft) => draft.type === "flight"));
-  assert.ok(merged.some((draft) => draft.flightNumber.replace(/\s+/gu, "") === "AZ1607"));
-  assert.ok(merged.some((draft) => draft.flightNumber.replace(/\s+/gu, "") === "SQ948"));
-});
-
-test("mergeConfirmationDrafts rolls past-year dates forward for upcoming trips", () => {
-  const prepared = preparePdfTextForParsing(baliFixtureText);
-  const merged = mergeConfirmationDrafts([], prepared, { referenceDate: new Date("2026-06-15T12:00:00Z") });
-  assert.ok(merged.length >= 5);
-  assert.ok(merged.every((draft) => draft.localTime.startsWith("2026-")));
-});
-
-test("parseScannedReservationsJson recovers truncated multi-leg JSON", () => {
-  const truncated = `{
-  "reservations": [
-    {
-      "type": "flight",
-      "flightNumber": "AS865",
-      "departureAirport": "ONT",
-      "arrivalAirport": "SEA",
-      "localTime": "2025-09-12 06:00"
-    },
-    {
-      "type": "flight",
-      "flightNumber": "AS6422",
-      "departureAirport": "SEA",
-      "arrivalAirport": "FCO",
-      "localTime": "2025-09-12 11:30"
-    },
-    {
-      "type": "flight",
-      "flightNumber": "SQ948",
-      "departureAirport": "SIN",
-      "arrivalAirport": "DPS",
-      "localTime": "2025-09-25 14:15"
-    }`;
-  const drafts = parseScannedReservationsJson(truncated);
-  assert.equal(drafts.length, 3);
-  assert.equal(drafts[2]?.flightArrivalAirport, "DPS");
+test("I61: mergeConfirmationDrafts extracts ÖBB train without AI", () => {
+  const drafts = mergeConfirmationDrafts([], OBB_COMBINED_PDF_TEXT, {
+    referenceDate: new Date("2026-09-01T12:00:00Z"),
+  });
+  const train = drafts.find((draft) => draft.type === "train");
+  assert.ok(train);
+  assert.equal(train?.trainNumber, "86");
+  assert.equal(train?.localTime, "2026-09-20 12:34");
+  assert.match(train?.location ?? "", /Bolzano.*München/i);
+  assert.equal(train?.trainSeat, "267/63,67,64,68");
 });

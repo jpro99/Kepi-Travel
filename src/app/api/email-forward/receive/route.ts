@@ -858,6 +858,10 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
       const reservationId = `res-email-${generateId()}`;
       const parserTrainNumber =
         typeof parserDraftRecord.trainNumber === "string" ? parserDraftRecord.trainNumber.trim() : "";
+      const parserTrainPlatform =
+        typeof parserDraftRecord.trainPlatform === "string" ? parserDraftRecord.trainPlatform.trim() : "";
+      const parserTrainSeat =
+        typeof parserDraftRecord.trainSeat === "string" ? parserDraftRecord.trainSeat.trim() : "";
       const passengerTicketLinks =
         parserType === "train" && pdfAttachments.length > 0
           ? buildPassengerTicketSourceLinks({
@@ -892,6 +896,8 @@ async function processEmailForwardWebhook(req: Request, requestId: string): Prom
         quotedMilesEarned: emailPricing.milesEarned,
         pointsProgram: emailPricing.program,
         trainNumber: parserType === "train" ? parserTrainNumber : undefined,
+        trainPlatform: parserType === "train" ? parserTrainPlatform || undefined : undefined,
+        trainSeat: parserType === "train" ? parserTrainSeat || undefined : undefined,
         flightNumber: parserType === "flight" ? parserFlightNumber : "",
         flightAirline: resolvedAirline,
         flightDate: parserType === "flight" ? parserLocalTime.slice(0, 10) : "",
