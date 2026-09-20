@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-20 (I61 Bolzano→München train number/platform/seat)
+Last updated: 2026-09-20 (I61 train + CI date-correction fix)
+
+## Incident 2026-09-20 — Vercel/CI failures: date-sensitive tests after Europe trip dates passed (Jeff)
+
+After Sep 5–20 2026, `correctPastTravelIsoDate` kept bumping **same-year** past stays (e.g. NEREA Sep 5 2026 → 2027), breaking 8 law tests + CI/Vercel preview deploys. **Fix:** only roll forward when stored **year < reference year** (2025→2026 typo repair); never re-bump booked 2026 dates. Trip window repair uses densest 90-day reservation cluster to drop stray June forwards. Production `main` last green deploy 2026-09-14; previews on feature branches failed until this landed.
 
 ## Decision 2026-09-20 — I61: cross-border rail shows train number, platform, seat (Jeff)
 
