@@ -64,6 +64,26 @@ test("G55: J7HBM5 Trenitalia PDF extracts both legs (8312 + 91312)", () => {
   assert.match(legs[1]?.location ?? "", /Bari.*Aeroporto/i);
 });
 
+test("I61: ÖBB/DB Bolzano → München Hbf reads EC, Gleis, Wagen/Platz", () => {
+  const text = `
+ÖBB
+Codice prenotazione QK7H2M
+Von: Bolzano / Bozen
+Nach: München Hbf
+Abfahrt 20/09/2026 08:45
+Ankunft 20/09/2026 12:58
+EC 88
+Gleis 3
+Wagen 21 Platz 42
+`;
+  const facts = extractRailTicketFacts(text, "Bolzano Munich train");
+  assert.ok(facts);
+  assert.equal(facts?.trainNumber, "88");
+  assert.equal(facts?.trainPlatform, "3");
+  assert.equal(facts?.trainSeat, "21/42");
+  assert.match(facts?.location ?? "", /Bolzano.*München/i);
+});
+
 test("G55: passenger facts read labeled names from Trenitalia PDFs", () => {
   const stephanie = extractRailPassengers(TRENITALIA_STEPHANIE_PDF_TEXT);
   const jeffery = extractRailPassengers(TRENITALIA_JEFFERY_PDF_TEXT);

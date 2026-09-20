@@ -8,6 +8,8 @@ export interface RailTicketFacts {
   title: string;
   provider: string;
   trainNumber: string;
+  trainPlatform: string;
+  trainSeat: string;
   localTime: string;
   location: string;
   confirmationCode: string;
@@ -24,16 +26,20 @@ export interface RailPassengerFacts {
 const ITALIAN_RAIL_RE =
   /\b(?:trenitalia|italo|ntv|frecciarossa|frecciargento|frecciabianca|intercity|regionale|partenza|arrivo|binario|stazione|venezia\s+s\.?\s*lucia|biglietto)\b/iu;
 
-const RAIL_WORD_RE = /\b(?:train|rail|amtrak|platform|trenitalia|italo)\b/iu;
+const CENTRAL_EUROPE_RAIL_RE =
+  /\b(?:öbb|obb|deutsche\s+bahn|db\s+bahn|bahn\.de|rail\s+europe|eurocity|euro\s+city|gleis|wagen|platz|abfahrt|ankunft|zug(?:nummer)?|bahnhof)\b/iu;
 
-const TRAIN_SERVICE_FIND_RE =
-  /\b(Frecciargento|Frecciarossa|Frecciabianca|Regionale(?:\s+Veloce)?|Intercity|InterCity)\s+(\d{4,5})\b/iu;
+const RAIL_WORD_RE =
+  /\b(?:train|rail|amtrak|platform|trenitalia|italo|öbb|deutsche\s+bahn|gleis|wagen)\b/iu;
+
+const TRAIN_SERVICE_LABEL_RE =
+  /\b(Frecciargento|Frecciarossa|Frecciabianca|Regionale(?:\s+Veloce)?|Intercity|InterCity|ICE|IC|EC|RJ|IR|RE|EN|RJX|Railjet|Rail\s+jet|Nightjet|NJ|EuroCity|Euro\s+City)\s+(\d{2,5})\b/iu;
 
 const TRAIN_SERVICE_SPLIT_RE =
-  /\b(Frecciargento|Frecciarossa|Frecciabianca|Regionale(?:\s+Veloce)?|Intercity|InterCity)\s+(\d{4,5})\b/giu;
+  /\b(Frecciargento|Frecciarossa|Frecciabianca|Regionale(?:\s+Veloce)?|Intercity|InterCity|ICE|IC|EC|RJ|IR|RE|EN|RJX|Railjet|Rail\s+jet|Nightjet|NJ|EuroCity|Euro\s+City)\s+(\d{2,5})\b/giu;
 
 export function isRailTicketText(text: string): boolean {
-  return ITALIAN_RAIL_RE.test(text) || RAIL_WORD_RE.test(text);
+  return ITALIAN_RAIL_RE.test(text) || CENTRAL_EUROPE_RAIL_RE.test(text) || RAIL_WORD_RE.test(text);
 }
 
 function pad2(value: number): string {
@@ -92,6 +98,12 @@ function normalizeStationLabel(raw: string): string {
   if (/^BARI\s+C\.?LE(?:\s+FNB)?$/iu.test(trimmed)) return "Bari Centrale FNB";
   if (/^BARI\s+AEROPORTO/iu.test(trimmed)) return "Bari Aeroporto";
   if (/^Bari\s+Centrale$/iu.test(trimmed)) return "Bari Centrale";
+  if (/^Bolzano(?:\s*\/\s*Bozen)?$/iu.test(trimmed)) return "Bolzano";
+  if (/^Bozen(?:\s*\/\s*Bolzano)?$/iu.test(trimmed)) return "Bolzano";
+  if (/^M[üu]nchen(?:\s+Hbf)?$/iu.test(trimmed)) return "München Hbf";
+  if (/^Munich(?:\s+Hbf)?$/iu.test(trimmed)) return "München Hbf";
+  if (/^Innsbruck(?:\s+Hbf)?$/iu.test(trimmed)) return "Innsbruck Hbf";
+  if (/^Brennero(?:\s*\/\s*Brenner)?$/iu.test(trimmed)) return "Brennero";
   return trimmed;
 }
 
@@ -113,13 +125,16 @@ function findConfirmation(text: string): string {
 function findProvider(text: string): string {
   if (/\bitalo\b/iu.test(text)) return "Italo";
   if (/\b(?:trenitalia|frecciarossa|frecciargento|frecciabianca)\b/iu.test(text)) return "Trenitalia";
+  if (/\b(?:öbb|obb)\b/iu.test(text)) return "ÖBB";
+  if (/\b(?:deutsche\s+bahn|db\s+bahn|bahn\.de)\b/iu.test(text)) return "Deutsche Bahn";
+  if (/\b(?:rail\s+europe)\b/iu.test(text)) return "Rail Europe";
   if (/\bamtrak\b/iu.test(text)) return "Amtrak";
   return "";
 }
 
 function findKnownStations(text: string): { from: string; to: string } | null {
   const stationPattern =
-    /\b(Lecce|Bari Centrale|BARI C\.?LE(?:\s+FNB)?|BARI AEROPORTO(?:\s+KAROL\s+WOJTYLA)?|Bari|Brindisi|Monopoli|Polignano|Roma\s+Termini|Roma\s+Tiburtina|Milano\s+Centrale|Firenze\s+S\.?\s*M\.?\s*N\.?|Napoli\s+Centrale|Venezia\s+S\.?\s*Lucia|Venezia\s+Mestre|Verona\s+P\.?\s*ta\s+Nuova|Bologna\s+Centrale|Torino\s+P\.?\s*ta\s+Nuova)\b/giu;
+    /\b(Lecce|Bari Centrale|BARI C\.?LE(?:\s+FNB)?|BARI AEROPORTO(?:\s+KAROL\s+WOJTYLA)?|Bari|Brindisi|Monopoli|Polignano|Roma\s+Termini|Roma\s+Tiburtina|Milano\s+Centrale|Firenze\s+S\.?\s*M\.?\s*N\.?|Napoli\s+Centrale|Venezia\s+S\.?\s*Lucia|Venezia\s+Mestre|Verona\s+P\.?\s*ta\s+Nuova|Bologna\s+Centrale|Torino\s+P\.?\s*ta\s+Nuova|Bolzano(?:\s*\/\s*Bozen)?|Bozen(?:\s*\/\s*Bolzano)?|M[üu]nchen(?:\s+Hbf)?|Munich(?:\s+Hbf)?|Innsbruck(?:\s+Hbf)?|Brennero(?:\s*\/\s*Brenner)?|Brenner(?:\s*\/\s*Brennero)?)\b/giu;
   const timed: Array<{ station: string; minutes: number }> = [];
   for (const match of text.matchAll(stationPattern)) {
     const station = normalizeStationLabel(match[0] ?? "");
@@ -143,14 +158,14 @@ function findStations(text: string): { from: string; to: string } | null {
   if (known) return known;
 
   const partenza = text.match(
-    /(?:partenza|departure|from)\s*[:\s]*\n+\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ'. ]{2,50})/iu,
+    /(?:partenza|departure|dep\.?|abfahrt|von|from)\s*[:\s]*(?:\n+\s*)?([A-ZÀ-ÿ][A-Za-zÀ-ÿ'. /]{2,50})/iu,
   );
   const arrivo = text.match(
-    /(?:arrivo|arrival|to)\s*[:\s]*\n+\s*([A-ZÀ-ÿ][A-Za-zÀ-ÿ'. ]{2,50})/iu,
+    /(?:arrivo|arrival|arr\.?|ankunft|nach|to)\s*[:\s]*(?:\n+\s*)?([A-ZÀ-ÿ][A-Za-zÀ-ÿ'. /]{2,50})/iu,
   );
   if (partenza?.[1] && arrivo?.[1]) {
-    const from = normalizeStationLabel(partenza[1]);
-    const to = normalizeStationLabel(arrivo[1]);
+    const from = normalizeStationLabel(partenza[1].split(/\n/u)[0] ?? partenza[1]);
+    const to = normalizeStationLabel(arrivo[1].split(/\n/u)[0] ?? arrivo[1]);
     if (from.length >= 3 && to.length >= 3) return { from, to };
   }
 
@@ -187,7 +202,7 @@ export function findRailArrivalLocalTimeInSegment(text: string): string | null {
 
 function findDepartureLocalTime(text: string): string | null {
   const labeled = text.match(
-    /(?:partenza|departure|dep\.?)\s*[:\s]*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s+(\d{1,2}[:.]\d{2})/iu,
+    /(?:partenza|departure|dep\.?|abfahrt)\s*[:\s]*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s+(\d{1,2}[:.]\d{2})/iu,
   );
   if (labeled?.[1] && labeled[2]) {
     const day = parseRailSlashDate(labeled[1], true);
@@ -206,15 +221,37 @@ function findDepartureLocalTime(text: string): string | null {
   return null;
 }
 
+function findPlatformNumber(text: string): string {
+  const match = text.match(/\b(?:binario|platform|bin\.?|gleis)\s*[:#]?\s*(\d{1,2}[A-Z]?)\b/iu);
+  return match?.[1]?.trim() ?? "";
+}
+
 function findPlatformNote(text: string): string {
-  const match = text.match(/\b(?:binario|platform|bin\.?)\s*[:#]?\s*(\d{1,2}[A-Z]?)\b/iu);
-  return match?.[1] ? `Platform ${match[1]}` : "";
+  const platform = findPlatformNumber(text);
+  return platform ? `Platform ${platform}` : "";
+}
+
+function findTrainSeat(text: string): string {
+  const coachSeat = text.match(
+    /\b(?:coach|carrozza|wagen|wg\.?)\s*(\d+)\s*(?:[/,·]|posto|seat|platz|pl\.?|sitz)?\s*(\d{1,3}[A-Z]?)\b/iu,
+  );
+  if (coachSeat?.[1] && coachSeat[2]) {
+    return `${coachSeat[1]}/${coachSeat[2]}`;
+  }
+  const seatOnly = text.match(/\b(?:posto|seat|platz|pl\.?|sitz)\s*[:#]?\s*(\d{1,3}[A-Z]?)\b/iu);
+  return seatOnly?.[1]?.trim() ?? "";
 }
 
 function findTrainService(text: string): { service: string; trainNumber: string } | null {
-  const match = text.match(TRAIN_SERVICE_FIND_RE);
-  if (!match?.[1] || !match?.[2]) return null;
-  return { service: match[1].trim(), trainNumber: match[2].trim() };
+  const labeled = text.match(TRAIN_SERVICE_LABEL_RE);
+  if (labeled?.[1] && labeled[2]) {
+    return { service: labeled[1].trim(), trainNumber: labeled[2].trim() };
+  }
+  const zug = text.match(/\b(?:zug|train|service)\s*[:#]?\s*([A-Z]{1,4}\s*)?(\d{2,5})\b/iu);
+  if (zug?.[2]) {
+    return { service: (zug[1] ?? "").trim(), trainNumber: zug[2].trim() };
+  }
+  return null;
 }
 
 function buildRailTitle(
@@ -239,21 +276,33 @@ function extractRailTicketFactsFromSegment(
   const localTime = findDepartureLocalTime(combined);
   const confirmationCode = findConfirmation(combined) || sharedConfirmation;
   const provider = findProvider(combined);
+  const trainPlatform = findPlatformNumber(combined);
+  const trainSeat =
+    findTrainSeat(combined) ||
+    extractRailPassengers(combined).find((row) => row.coachSeat.trim())?.coachSeat.trim() ||
+    "";
   const notes = findPlatformNote(combined);
   const service = findTrainService(combined);
   if (!stations && !localTime && !confirmationCode && !service) return null;
 
   const location = stations ? `${stations.from} → ${stations.to}` : "";
   const title = buildRailTitle(service, location, subject);
+  const timezone = ITALIAN_RAIL_RE.test(combined)
+    ? "Europe/Rome"
+    : CENTRAL_EUROPE_RAIL_RE.test(combined)
+      ? "Europe/Berlin"
+      : "";
 
   return {
     title,
     provider,
     trainNumber: service?.trainNumber ?? "",
+    trainPlatform,
+    trainSeat,
     localTime: localTime ?? "",
     location,
     confirmationCode,
-    timezone: ITALIAN_RAIL_RE.test(combined) ? "Europe/Rome" : "",
+    timezone,
     notes,
   };
 }

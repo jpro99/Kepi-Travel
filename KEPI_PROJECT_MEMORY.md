@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-14 (G66 Venice mid-stay Home + Plan footer strip)
+Last updated: 2026-09-20 (I61 Bolzano→München train number/platform/seat)
+
+## Decision 2026-09-20 — I61: cross-border rail shows train number, platform, seat (Jeff)
+
+Bolzano→Munich train showed route only — no EC number, Gleis, or Wagen/Platz. **I61:** extended `railTicketExtract.ts` for ÖBB/DB (Gleis, Wagen, Platz, Bolzano/München stations); `trainReservationFields.ts` re-parses stored ticket text when fields blank; Trip timeline + drawer + Home travel-day coach surface train number, platform, seat.
 
 ## Decision 2026-09-14 — G66: Venice checkout-day Home honest-missing (Jeff CEO ACK)
 

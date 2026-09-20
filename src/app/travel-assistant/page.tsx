@@ -73,6 +73,7 @@ import { useBrowserConnectivity } from "@/hooks/useBrowserConnectivity";
 import { useOfflineTravelKitSync } from "@/hooks/useOfflineTravelKitSync";
 import { scheduleLocalNotification, triggerHaptic } from "@/lib/native/capacitorBridge";
 import { trackEvent } from "@/lib/analytics/trackEvent";
+import { resolveTrainFields } from "@/lib/travelAssistant/trainReservationFields";
 import {
   burstFamilyLocationFix,
   resumePersistentFamilyLocationWatch,
@@ -438,6 +439,8 @@ interface ReservationDraft {
   checkOutDate?: string;
   roomType?: string;
   trainNumber?: string;
+  trainPlatform?: string;
+  trainSeat?: string;
   /** City searched when hotel was saved from Kepi hotel search. */
   hotelSearchCity?: string;
   quotedPriceUsd?: number;
@@ -6286,6 +6289,9 @@ export default function TravelAssistantPage() {
         flightNumber: mappedType === "flight" ? value.flightNumber.trim() : undefined,
         flightAirline: mappedType === "flight" ? value.provider.trim() : undefined,
         flightDate: mappedType === "flight" ? localTime.slice(0, 10) : undefined,
+        trainNumber: mappedType === "train" ? value.flightNumber.trim() : undefined,
+        trainPlatform: mappedType === "train" ? value.trainPlatform.trim() : undefined,
+        trainSeat: mappedType === "train" ? value.trainSeat.trim() : undefined,
       });
       pushUndoSnapshot("Manual reservation added");
       // Build the new list first, then set state AND save in one step
@@ -7517,6 +7523,8 @@ export default function TravelAssistantPage() {
       if (kind === "reservation") {
         const reservation = reservations.find((item) => item.id === id);
         if (reservation) {
+          const trainEnriched =
+            reservation.type === "train" ? resolveTrainFields(reservation) : null;
           setDrawerDraft({
             type: reservation.type,
             title: coerceHotelTitle(reservation),
@@ -7547,7 +7555,9 @@ export default function TravelAssistantPage() {
             flightSeatNumber: reservation.flightSeatNumber,
             checkOutDate: reservation.checkOutDate,
             roomType: reservation.roomType,
-            trainNumber: reservation.trainNumber,
+            trainNumber: trainEnriched?.trainNumber || reservation.trainNumber,
+            trainPlatform: trainEnriched?.trainPlatform || reservation.trainPlatform,
+            trainSeat: trainEnriched?.trainSeat || reservation.trainSeat,
             hotelSearchCity: reservation.hotelSearchCity,
             quotedPriceUsd: reservation.quotedPriceUsd,
             quotedPointsMiles: reservation.quotedPointsMiles,
@@ -10016,6 +10026,46 @@ export default function TravelAssistantPage() {
                   </p>
                 </div>
               ) : null}
+            </section>
+          ) : null}
+          {drawerDraft.type === "train" ? (
+            <section className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-900">Train details</p>
+              <div className="grid gap-3 grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-emerald-900">Train number</span>
+                  <input
+                    value={drawerDraft.trainNumber ?? ""}
+                    onChange={(event) =>
+                      setDrawerDraft((prev) => ({ ...prev, trainNumber: event.target.value.trim() }))
+                    }
+                    placeholder="EC 88"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-emerald-900">Platform / Gleis</span>
+                  <input
+                    value={drawerDraft.trainPlatform ?? ""}
+                    onChange={(event) =>
+                      setDrawerDraft((prev) => ({ ...prev, trainPlatform: event.target.value.trim() }))
+                    }
+                    placeholder="3"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                  />
+                </label>
+                <label className="block col-span-2">
+                  <span className="mb-1 block text-xs font-semibold text-emerald-900">Coach / seat</span>
+                  <input
+                    value={drawerDraft.trainSeat ?? ""}
+                    onChange={(event) =>
+                      setDrawerDraft((prev) => ({ ...prev, trainSeat: event.target.value.trim() }))
+                    }
+                    placeholder="21/42"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                  />
+                </label>
+              </div>
             </section>
           ) : null}
           <label className="block">

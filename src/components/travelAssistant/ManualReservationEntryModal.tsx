@@ -22,6 +22,8 @@ export interface ManualReservationFormValue {
   checkOutDate: string;
   roomType: string;
   flightNumber: string;
+  trainPlatform: string;
+  trainSeat: string;
 }
 
 interface FamilyMemberOption {
@@ -51,6 +53,8 @@ interface ScanDraftPayload {
   checkOutDate?: string;
   roomType?: string;
   flightNumber?: string;
+  trainPlatform?: string;
+  trainSeat?: string;
   flightDepartureAirport?: string;
   flightArrivalAirport?: string;
 }
@@ -137,6 +141,8 @@ export function ManualReservationEntryModal({
   const [checkOutDate, setCheckOutDate] = useState("");
   const [roomType, setRoomType] = useState("");
   const [flightNumber, setFlightNumber] = useState("");
+  const [trainPlatform, setTrainPlatform] = useState("");
+  const [trainSeat, setTrainSeat] = useState("");
   const [assignedTo, setAssignedTo] = useState<string[]>(defaultAssignees);
   const [formError, setFormError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -181,6 +187,8 @@ export function ManualReservationEntryModal({
       checkOutDate: checkOutDate.trim(),
       roomType: roomType.trim(),
       flightNumber: flightNumber.trim(),
+      trainPlatform: trainPlatform.trim(),
+      trainSeat: trainSeat.trim(),
     });
   };
 
@@ -396,10 +404,32 @@ export function ManualReservationEntryModal({
                 <input
                   value={flightNumber}
                   onChange={(e) => setFlightNumber(e.target.value)}
-                  placeholder={reservationType === "flight" ? "e.g. VI3557" : "e.g. Nozomi 15"}
+                  placeholder={reservationType === "flight" ? "e.g. VI3557" : "e.g. EC 88"}
                   className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
                 />
               </label>
+            ) : null}
+            {reservationType === "train" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Platform / Gleis</span>
+                  <input
+                    value={trainPlatform}
+                    onChange={(e) => setTrainPlatform(e.target.value)}
+                    placeholder="e.g. 3"
+                    className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Coach / seat</span>
+                  <input
+                    value={trainSeat}
+                    onChange={(e) => setTrainSeat(e.target.value)}
+                    placeholder="e.g. 21/42"
+                    className="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium text-slate-900 placeholder-slate-400 focus:border-cyan-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500"
+                  />
+                </label>
+              </div>
             ) : null}
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Notes (optional)</span>

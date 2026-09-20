@@ -928,6 +928,11 @@ Trenitalia / Italo PDFs print `13/09/2026`, Partenza/Arrivo, station names, bina
 
 **Test:** `src/lib/travelAssistant/travelAssistantPageAnalytics.test.ts`
 
+**I61 — Cross-border rail shows train number, platform, seat**  
+ÖBB / Deutsche Bahn tickets (Bolzano → München, Gleis, Wagen/Platz) must parse into train number, platform, and seat — not a generic “Train” card with route only. Trip timeline, Home travel-day coach, and the reservation drawer all surface those fields; re-parse stored ticket text when fields are blank. Confirmations untouched.
+
+**Test:** `src/lib/travelAssistant/railTicketExtract.test.ts`, `src/lib/travelAssistant/trainReservationFields.test.ts`
+
 ---
 
 ## DATA / API LAWS
@@ -1179,6 +1184,7 @@ Domestic arrive-by buffer is **120 minutes** (not 90). International stays 180. 
 | I56 | `src/lib/pwa/recoverStaleClientBundle.test.ts` |
 | I57 | `src/lib/travelAssistant/bookedHopCoverage.test.ts` |
 | I58 | `src/lib/travelAssistant/railTicketExtract.test.ts` |
+| I61 | `src/lib/travelAssistant/railTicketExtract.test.ts`, `src/lib/travelAssistant/trainReservationFields.test.ts` |
 | I59 | `src/lib/travelAssistant/activityTicketExtract.test.ts` |
 | I60 | `src/lib/travelAssistant/travelAssistantPageAnalytics.test.ts` |
 | I61 | `src/lib/pwa/recoverStaleClientBundle.test.ts` |
