@@ -4,6 +4,7 @@ import {
   TRENITALIA_JEFFERY_PDF_TEXT,
   TRENITALIA_STEPHANIE_PDF_TEXT,
 } from "@/lib/travelAssistant/fixtures/bariVeniceSep12Fixture";
+import { OBB_COMBINED_PDF_TEXT } from "@/lib/travelAssistant/fixtures/obbBolzanoMunichSep20Fixture";
 import {
   extractRailPassengers,
   extractRailTicketFacts,
@@ -62,6 +63,18 @@ test("G55: J7HBM5 Trenitalia PDF extracts both legs (8312 + 91312)", () => {
   assert.equal(legs[1]?.trainNumber, "91312");
   assert.equal(legs[1]?.localTime, "2026-09-12 11:20");
   assert.match(legs[1]?.location ?? "", /Bari.*Aeroporto/i);
+});
+
+test("I61: ÖBB FAHRSCHEIN + RESERVIERUNG reads RJ 86, seats, Bolzano → München", () => {
+  const facts = extractRailTicketFacts(OBB_COMBINED_PDF_TEXT, "OEBBTicket Bolzano Munich");
+  assert.ok(facts);
+  assert.equal(facts?.trainNumber, "86");
+  assert.match(facts?.location ?? "", /Bolzano.*München/i);
+  assert.equal(facts?.localTime, "2026-09-20 12:34");
+  assert.equal(facts?.trainSeat, "267/63,67,64,68");
+  assert.equal(facts?.provider, "ÖBB");
+  assert.match(facts?.notes ?? "", /Platform not on ÖBB ticket/i);
+  assert.equal(facts?.confirmationCode, "0193514304912701");
 });
 
 test("I61: ÖBB/DB Bolzano → München Hbf reads EC, Gleis, Wagen/Platz", () => {

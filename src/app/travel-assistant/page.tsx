@@ -7186,6 +7186,8 @@ export default function TravelAssistantPage() {
           throw new Error(payload.error ?? `Ticket scan failed (${response.status})`);
         }
 
+        const documentText = payload.documentText?.trim() ?? "";
+
         const preparedDrafts = scannedDrafts.map((rawDraft) =>
           enrichReservationForAutoImport(
             prepareReviewDraftForAccept({
@@ -7210,6 +7212,9 @@ export default function TravelAssistantPage() {
               flightArrivalAirport: rawDraft.flightArrivalAirport ?? "",
               flightDepartureTime: rawDraft.flightDepartureTime ?? rawDraft.localTime,
               checkOutDate: rawDraft.checkOutDate ?? "",
+              trainNumber: rawDraft.trainNumber ?? "",
+              trainPlatform: rawDraft.trainPlatform ?? "",
+              trainSeat: rawDraft.trainSeat ?? "",
             }),
           ),
         );
@@ -7221,17 +7226,21 @@ export default function TravelAssistantPage() {
             id: nextId("res"),
             source: "imported" as const,
             sourceEmailSubject: `Scanned ticket: ${file.name || "image upload"}`,
+            originalEmailText: documentText || undefined,
+            hasPdfAttachment: payload.scanKind === "pdf",
             flightNumber: pricedDraft.flightNumber ?? "",
             flightAirline: pricedDraft.flightAirline ?? pricedDraft.provider,
             flightDate: pricedDraft.flightDate ?? pricedDraft.localTime.slice(0, 10),
             flightDepartureAirport: pricedDraft.flightDepartureAirport ?? "",
             flightArrivalAirport: pricedDraft.flightArrivalAirport ?? "",
             flightDepartureTime: pricedDraft.flightDepartureTime ?? pricedDraft.localTime,
+            trainNumber: pricedDraft.trainNumber,
+            trainPlatform: pricedDraft.trainPlatform,
+            trainSeat: pricedDraft.trainSeat,
           };
         });
 
         // G42 — a dropped receipt prices the bookings already on this trip first.
-        const documentText = payload.documentText?.trim() ?? "";
         if (documentText && activeTripId) {
           const activeTrip = trips.find((entry) => entry.id === activeTripId);
           if (activeTrip) {

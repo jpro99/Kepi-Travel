@@ -20,6 +20,9 @@ export interface ScannedReservationDraft {
   flightDate: string;
   flightDepartureAirport: string;
   flightArrivalAirport: string;
+  trainNumber: string;
+  trainPlatform: string;
+  trainSeat: string;
   checkOutDate: string;
   roomType: string;
   quotedPriceUsd?: number;
@@ -174,14 +177,21 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
   const confirmationCode =
     typeof reservationNode.confirmationCode === "string" ? reservationNode.confirmationCode.trim() : "";
   const location = typeof reservationNode.location === "string" ? reservationNode.location.trim() : "";
-  const numberValue =
+  const flightNumberValue =
     typeof reservationNode.flightOrTrainNumber === "string"
       ? reservationNode.flightOrTrainNumber.trim()
       : typeof reservationNode.flightNumber === "string"
         ? reservationNode.flightNumber.trim()
-        : typeof reservationNode.trainNumber === "string"
-          ? reservationNode.trainNumber.trim()
-          : "";
+        : "";
+  const trainNumberValue =
+    typeof reservationNode.trainNumber === "string"
+      ? reservationNode.trainNumber.trim()
+      : scannedType === "train"
+        ? flightNumberValue
+        : "";
+  const trainPlatformValue =
+    typeof reservationNode.trainPlatform === "string" ? reservationNode.trainPlatform.trim() : "";
+  const trainSeatValue = typeof reservationNode.trainSeat === "string" ? reservationNode.trainSeat.trim() : "";
   const departureAirport =
     typeof reservationNode.departureAirport === "string"
       ? reservationNode.departureAirport.trim().toUpperCase().slice(0, 4)
@@ -234,11 +244,14 @@ export function buildScannedReservationDraft(reservationNode: Record<string, unk
     critical: scannedType === "flight" || scannedType === "train" || scannedType === "ride",
     confidence: "medium",
     notes,
-    flightNumber: scannedType === "flight" ? numberValue : "",
+    flightNumber: scannedType === "flight" ? flightNumberValue : "",
     flightAirline: scannedType === "flight" ? provider : "",
     flightDate: scannedType === "flight" ? flightDateFromLocal : "",
     flightDepartureAirport: scannedType === "flight" ? departureAirport : "",
     flightArrivalAirport: scannedType === "flight" ? arrivalAirport : "",
+    trainNumber: scannedType === "train" ? trainNumberValue : "",
+    trainPlatform: scannedType === "train" ? trainPlatformValue : "",
+    trainSeat: scannedType === "train" ? trainSeatValue : "",
     checkOutDate: scannedType === "hotel" ? checkOutDate : "",
     roomType: scannedType === "hotel" ? roomType : "",
     quotedPriceUsd:

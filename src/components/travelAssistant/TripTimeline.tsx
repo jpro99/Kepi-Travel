@@ -17,7 +17,7 @@ import { DayWalkthroughBlock } from "@/components/travelAssistant/DayWalkthrough
 import { buildDayWalkthrough } from "@/lib/travelAssistant/dayWalkthrough";
 import type { ReservationLinkInput } from "@/lib/travelAssistant/reservationLinks";
 import { reservationPropertyName } from "@/lib/travelAssistant/reservationDisplayLabel";
-import { resolveTrainFields } from "@/lib/travelAssistant/trainReservationFields";
+import { resolveTrainFields, trainPlatformDisplayLabel } from "@/lib/travelAssistant/trainReservationFields";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -345,9 +345,9 @@ function ReservationCard({
               </div>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-xs">
-              {trainFields.trainPlatform ? (
+              {trainPlatformDisplayLabel(trainFields, reservation.notes) ? (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
-                  Platform {trainFields.trainPlatform}
+                  {trainPlatformDisplayLabel(trainFields, reservation.notes)}
                 </span>
               ) : null}
               {trainFields.trainSeat ? (

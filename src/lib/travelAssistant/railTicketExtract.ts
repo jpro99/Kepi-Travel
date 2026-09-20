@@ -27,7 +27,7 @@ const ITALIAN_RAIL_RE =
   /\b(?:trenitalia|italo|ntv|frecciarossa|frecciargento|frecciabianca|intercity|regionale|partenza|arrivo|binario|stazione|venezia\s+s\.?\s*lucia|biglietto)\b/iu;
 
 const CENTRAL_EUROPE_RAIL_RE =
-  /\b(?:öbb|obb|deutsche\s+bahn|db\s+bahn|bahn\.de|rail\s+europe|eurocity|euro\s+city|gleis|wagen|platz|abfahrt|ankunft|zug(?:nummer)?|bahnhof)\b/iu;
+  /\b(?:öbb|obb|deutsche\s+bahn|db\s+bahn|bahn\.de|rail\s+europe|eurocity|euro\s+city|gleis|wagen|platz|abfahrt|ankunft|zug(?:nummer)?|bahnhof|fahrschein|reservierung|sitzpl[aä]tze|personenverkehr|muenchen|m[üu]nchen)\b/iu;
 
 const RAIL_WORD_RE =
   /\b(?:train|rail|amtrak|platform|trenitalia|italo|öbb|deutsche\s+bahn|gleis|wagen)\b/iu;
@@ -101,7 +101,9 @@ function normalizeStationLabel(raw: string): string {
   if (/^Bolzano(?:\s*\/\s*Bozen)?$/iu.test(trimmed)) return "Bolzano";
   if (/^Bozen(?:\s*\/\s*Bolzano)?$/iu.test(trimmed)) return "Bolzano";
   if (/^M[üu]nchen(?:\s+Hbf)?$/iu.test(trimmed)) return "München Hbf";
+  if (/^MUENCHEN(?:\s+HBF)?$/iu.test(trimmed)) return "München Hbf";
   if (/^Munich(?:\s+Hbf)?$/iu.test(trimmed)) return "München Hbf";
+  if (/^BOLZANO(?:\s*\/\s*BOZEN)?$/iu.test(trimmed)) return "Bolzano";
   if (/^Innsbruck(?:\s+Hbf)?$/iu.test(trimmed)) return "Innsbruck Hbf";
   if (/^Brennero(?:\s*\/\s*Brenner)?$/iu.test(trimmed)) return "Brennero";
   return trimmed;
@@ -109,6 +111,9 @@ function normalizeStationLabel(raw: string): string {
 
 function findConfirmation(text: string): string {
   const patterns = [
+    /\bbuchung\s+([\d\s]{14,22})\b/iu,
+    /\bticket\s*code\s+([\d\s]{14,22})\b/iu,
+    /\bticketcode\s+([\d\s]{14,22})\b/iu,
     /\bcodice\s+prenotazione\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
     /\bcodice\s+biglietto\s*[:#]?\s*([A-Z0-9]{6,14})\b/iu,
     /\bpnr\s*[:#]?\s*([A-Z0-9]{5,8})\b/iu,
@@ -117,7 +122,11 @@ function findConfirmation(text: string): string {
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
-    if (match?.[1]) return match[1].toUpperCase();
+    if (match?.[1]) {
+      const digits = match[1].replace(/\s+/gu, "");
+      if (digits.length >= 14) return digits;
+      return match[1].trim().toUpperCase();
+    }
   }
   return "";
 }
@@ -134,7 +143,7 @@ function findProvider(text: string): string {
 
 function findKnownStations(text: string): { from: string; to: string } | null {
   const stationPattern =
-    /\b(Lecce|Bari Centrale|BARI C\.?LE(?:\s+FNB)?|BARI AEROPORTO(?:\s+KAROL\s+WOJTYLA)?|Bari|Brindisi|Monopoli|Polignano|Roma\s+Termini|Roma\s+Tiburtina|Milano\s+Centrale|Firenze\s+S\.?\s*M\.?\s*N\.?|Napoli\s+Centrale|Venezia\s+S\.?\s*Lucia|Venezia\s+Mestre|Verona\s+P\.?\s*ta\s+Nuova|Bologna\s+Centrale|Torino\s+P\.?\s*ta\s+Nuova|Bolzano(?:\s*\/\s*Bozen)?|Bozen(?:\s*\/\s*Bolzano)?|M[üu]nchen(?:\s+Hbf)?|Munich(?:\s+Hbf)?|Innsbruck(?:\s+Hbf)?|Brennero(?:\s*\/\s*Brenner)?|Brenner(?:\s*\/\s*Brennero)?)\b/giu;
+    /\b(Lecce|Bari Centrale|BARI C\.?LE(?:\s+FNB)?|BARI AEROPORTO(?:\s+KAROL\s+WOJTYLA)?|Bari|Brindisi|Monopoli|Polignano|Roma\s+Termini|Roma\s+Tiburtina|Milano\s+Centrale|Firenze\s+S\.?\s*M\.?\s*N\.?|Napoli\s+Centrale|Venezia\s+S\.?\s*Lucia|Venezia\s+Mestre|Verona\s+P\.?\s*ta\s+Nuova|Bologna\s+Centrale|Torino\s+P\.?\s*ta\s+Nuova|Bolzano(?:\s*\/\s*Bozen)?|BOLZANO(?:\s*\/\s*BOZEN)?|Bozen(?:\s*\/\s*Bolzano)?|M[üu]nchen(?:\s+Hbf)?|MUENCHEN(?:\s+HBF)?|Munich(?:\s+Hbf)?|Innsbruck(?:\s+Hbf)?|Brennero(?:\s*\/\s*Brenner)?|Brenner(?:\s*\/\s*Brennero)?)\b/giu;
   const timed: Array<{ station: string; minutes: number }> = [];
   for (const match of text.matchAll(stationPattern)) {
     const station = normalizeStationLabel(match[0] ?? "");
@@ -156,6 +165,15 @@ function findKnownStations(text: string): { from: string; to: string } | null {
 function findStations(text: string): { from: string; to: string } | null {
   const known = findKnownStations(text);
   if (known) return known;
+
+  const vonNach = text.match(
+    /\bVON\s*\n+\s*([A-Z][A-Z\s./]{2,30})\s*\n+\s*NACH\s*\n+\s*([A-Z][A-Z\s./]{2,30})\b/iu,
+  );
+  if (vonNach?.[1] && vonNach[2]) {
+    const from = normalizeStationLabel(vonNach[1]);
+    const to = normalizeStationLabel(vonNach[2]);
+    if (from.length >= 3 && to.length >= 3) return { from, to };
+  }
 
   const partenza = text.match(
     /(?:partenza|departure|dep\.?|abfahrt|von|from)\s*[:\s]*(?:\n+\s*)?([A-ZÀ-ÿ][A-Za-zÀ-ÿ'. /]{2,50})/iu,
@@ -231,7 +249,76 @@ function findPlatformNote(text: string): string {
   return platform ? `Platform ${platform}` : "";
 }
 
+function findObbYearHint(text: string): number | null {
+  const hf = text.match(/\bHF\s+\d{2}\.\d{2}\.(\d{2})\b/iu);
+  if (hf?.[1]) return 2000 + Number(hf[1]);
+  const range = text.match(/\b\d{2}\.\d{2}\.(\d{2})-\d{2}\.\d{2}\.\d{2}\b/u);
+  if (range?.[1]) return 2000 + Number(range[1]);
+  return null;
+}
+
+function parseObbShortDate(day: number, month: number, yearHint: number | null): string | null {
+  const year = yearHint ?? new Date().getUTCFullYear();
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const iso = `${year}-${pad2(month)}-${pad2(day)}`;
+  return Number.isNaN(Date.parse(`${iso}T00:00:00Z`)) ? null : iso;
+}
+
+function findObbReservationTimes(text: string): { departure: string; arrival: string } | null {
+  const yearHint = findObbYearHint(text);
+  const reservationBlock = text.match(/\bRESERVIERUNG\b[\s\S]{0,900}/iu)?.[0] ?? text;
+  const shortDate = reservationBlock.match(/\b(\d{2})\.(\d{2})\b/u);
+  const dayIso = shortDate
+    ? parseObbShortDate(Number(shortDate[1]), Number(shortDate[2]), yearHint)
+    : null;
+
+  const stationDep = reservationBlock.match(
+    /\bBolzano(?:\s*\/\s*Bozen)?\s+(\d{1,2})[:.](\d{2})\b/iu,
+  );
+  const stationArr = reservationBlock.match(
+    /\bM[üu]nchen(?:\s+Hbf)?\s+(\d{1,2})[:.](\d{2})\b/iu,
+  ) ?? reservationBlock.match(/\bMUENCHEN(?:\s+HBF)?\s+(\d{1,2})[:.](\d{2})\b/iu);
+
+  if (!dayIso) return null;
+  const depTime =
+    stationDep?.[1] && stationDep[2] ? parseRailTime(`${stationDep[1]}:${stationDep[2]}`) : null;
+  const arrTime =
+    stationArr?.[1] && stationArr[2] ? parseRailTime(`${stationArr[1]}:${stationArr[2]}`) : null;
+  if (!depTime) return null;
+  return {
+    departure: `${dayIso} ${depTime}`,
+    arrival: arrTime ? `${dayIso} ${arrTime}` : "",
+  };
+}
+
+function findObbZugService(text: string): { service: string; trainNumber: string } | null {
+  const reservationBlock = text.match(/\bRESERVIERUNG\b[\s\S]{0,600}/iu)?.[0] ?? text;
+  const railjet = reservationBlock.match(/\bRESERVIERUNG\s+(Railjet|Rail\s+jet|RJ)\b/iu);
+  const zug = reservationBlock.match(/\bZUG\s+(\d{1,4})\b/iu);
+  if (zug?.[1]) {
+    const service = railjet?.[1]?.trim() || "Railjet";
+    return { service: service.replace(/\s+/gu, ""), trainNumber: zug[1].trim() };
+  }
+  return null;
+}
+
+function findObbCoachSeats(text: string): string {
+  const reservationBlock = text.match(/\bRESERVIERUNG\b[\s\S]{0,900}/iu)?.[0] ?? text;
+  const wagen = reservationBlock.match(/\bWAGEN\s+(\d{1,4})\b/iu)?.[1]?.trim() ?? "";
+  const seatNumbers = [...reservationBlock.matchAll(/\b(\d{1,3})\s+(?:Fenster|Gang|Window|Aisle)\b/giu)]
+    .map((match) => match[1]?.trim() ?? "")
+    .filter(Boolean);
+  const uniqueSeats = [...new Set(seatNumbers)];
+  if (wagen && uniqueSeats.length > 0) {
+    return `${wagen}/${uniqueSeats.join(",")}`;
+  }
+  return "";
+}
+
 function findTrainSeat(text: string): string {
+  const obbSeat = findObbCoachSeats(text);
+  if (obbSeat) return obbSeat;
+
   const coachSeat = text.match(
     /\b(?:coach|carrozza|wagen|wg\.?)\s*(\d+)\s*(?:[/,·]|posto|seat|platz|pl\.?|sitz)?\s*(\d{1,3}[A-Z]?)\b/iu,
   );
@@ -243,6 +330,9 @@ function findTrainSeat(text: string): string {
 }
 
 function findTrainService(text: string): { service: string; trainNumber: string } | null {
+  const obb = findObbZugService(text);
+  if (obb) return obb;
+
   const labeled = text.match(TRAIN_SERVICE_LABEL_RE);
   if (labeled?.[1] && labeled[2]) {
     return { service: labeled[1].trim(), trainNumber: labeled[2].trim() };
@@ -264,6 +354,54 @@ function buildRailTitle(
   return cleanStation(subject) || "Train";
 }
 
+function buildObbNotes(combined: string, trainPlatform: string, arrivalTime: string): string {
+  const notes: string[] = [];
+  if (trainPlatform) notes.push(`Platform ${trainPlatform}`);
+  if (/\bohne\s+zugbindung\b/iu.test(combined)) {
+    notes.push("Flexible ticket (ohne Zugbindung) — reservation page has train and seats");
+  }
+  if (!trainPlatform && /\b(?:öbb|obb|fahrschein)\b/iu.test(combined)) {
+    notes.push("Platform not on ÖBB ticket — check station board or ÖBB app before departure");
+  }
+  if (arrivalTime) notes.push(`Arrives ${arrivalTime.slice(11)}`);
+  return notes.join(" · ");
+}
+
+function extractObbTicketFacts(text: string, subject: string): RailTicketFacts | null {
+  const combined = `${subject}\n${text}`.replace(/\r/gu, "");
+  if (!/\b(?:öbb|obb|fahrschein|reservierung)\b/iu.test(combined)) return null;
+
+  const stations = findStations(combined);
+  const obbTimes = findObbReservationTimes(combined);
+  const localTime = obbTimes?.departure ?? findDepartureLocalTime(combined);
+  const confirmationCode = findConfirmation(combined);
+  const provider = findProvider(combined) || "ÖBB";
+  const trainPlatform = findPlatformNumber(combined);
+  const trainSeat =
+    findTrainSeat(combined) ||
+    extractRailPassengers(combined).find((row) => row.coachSeat.trim())?.coachSeat.trim() ||
+    "";
+  const service = findTrainService(combined);
+  if (!stations && !localTime && !confirmationCode && !service && !trainSeat) return null;
+
+  const location = stations ? `${stations.from} → ${stations.to}` : "";
+  const title = buildRailTitle(service, location, subject);
+  const notes = buildObbNotes(combined, trainPlatform, obbTimes?.arrival ?? "");
+
+  return {
+    title,
+    provider,
+    trainNumber: service?.trainNumber ?? "",
+    trainPlatform,
+    trainSeat,
+    localTime: localTime ?? "",
+    location,
+    confirmationCode,
+    timezone: "Europe/Rome",
+    notes,
+  };
+}
+
 function extractRailTicketFactsFromSegment(
   text: string,
   subject: string,
@@ -271,6 +409,14 @@ function extractRailTicketFactsFromSegment(
 ): RailTicketFacts | null {
   const combined = `${subject}\n${text}`.replace(/\r/gu, "");
   if (!isRailTicketText(combined)) return null;
+
+  const obb = extractObbTicketFacts(text, subject);
+  if (obb) {
+    if (!obb.confirmationCode && sharedConfirmation) {
+      obb.confirmationCode = sharedConfirmation;
+    }
+    return obb;
+  }
 
   const stations = findStations(combined);
   const localTime = findDepartureLocalTime(combined);
@@ -371,6 +517,8 @@ export function extractRailTicketLegs(text: string, subject = ""): RailTicketFac
 }
 
 export function extractRailTicketFacts(text: string, subject = ""): RailTicketFacts | null {
+  const obb = extractObbTicketFacts(text, subject);
+  if (obb) return obb;
   const legs = extractRailTicketLegs(text, subject);
   return legs[0] ?? null;
 }

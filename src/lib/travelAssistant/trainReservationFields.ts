@@ -141,3 +141,18 @@ export function formatTrainOperationalSummary(fields: ResolvedTrainFields): stri
   if (fields.trainSeat) bits.push(`Seat ${fields.trainSeat}`);
   return bits.join(" · ");
 }
+
+/** ÖBB tickets rarely print Gleis — honest fallback for UI chips. */
+export function trainPlatformDisplayLabel(
+  fields: ResolvedTrainFields,
+  notes?: string,
+): string | null {
+  if (fields.trainPlatform) return `Platform ${fields.trainPlatform}`;
+  if (/\b(?:öbb|obb|fahrschein)\b/iu.test(notes ?? "")) {
+    return "Platform at station";
+  }
+  if (/platform not on öbb ticket/i.test(notes ?? "")) {
+    return "Platform at station";
+  }
+  return null;
+}
