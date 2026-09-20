@@ -57,6 +57,27 @@ function spanDays(start: string, end: string): number {
   return Math.round((b - a) / 86_400_000) + 1;
 }
 
+/** Drop stray forwards (e.g. June purchase) outside the densest trip-sized reservation band. */
+function densestReservationCluster(days: string[]): string[] {
+  if (days.length <= 1) return days;
+  const sorted = [...days].sort();
+  let best: string[] = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    const windowStart = sorted[i]!;
+    const windowEnd = addDaysIso(windowStart, MAX_TRIP_WINDOW_DAYS - 1);
+    const window = sorted.filter((d) => d >= windowStart && d <= windowEnd);
+    const bestMax = best[best.length - 1] ?? "";
+    const windowMax = window[window.length - 1] ?? "";
+    if (
+      window.length > best.length ||
+      (window.length === best.length && windowMax > bestMax)
+    ) {
+      best = window;
+    }
+  }
+  return best.length > 0 ? best : sorted;
+}
+
 /**
  * Roll trip bounds out of the past, snap to the dominant reservation year,
  * and expand only within that cluster — never a year-long franken-window.
@@ -77,9 +98,10 @@ export function reconcileTripWindowDates(
     .sort();
 
   const dominantYear = dominantReservationYear(correctedDays);
-  const cluster = dominantYear
+  const sameYearDays = dominantYear
     ? correctedDays.filter((d) => yearOf(d) === dominantYear)
     : correctedDays;
+  const cluster = densestReservationCluster(sameYearDays);
 
   let start = rawStart ? correctPastTravelIsoDate(rawStart, referenceDate) : "";
   let end = rawEnd ? correctPastTravelIsoDate(rawEnd, referenceDate) : "";

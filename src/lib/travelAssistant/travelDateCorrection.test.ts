@@ -7,6 +7,7 @@ import {
 } from "./travelDateCorrection";
 
 const JUNE_2026 = new Date("2026-06-15T12:00:00Z");
+const LATE_SEP_2026 = new Date("2026-09-20T12:00:00Z");
 
 test("correctPastTravelIsoDate rolls 2025 dates forward when reference is 2026", () => {
   assert.equal(correctPastTravelIsoDate("2025-09-12", JUNE_2026), "2026-09-12");
@@ -16,6 +17,11 @@ test("correctPastTravelIsoDate rolls 2025 dates forward when reference is 2026",
 test("correctPastTravelIsoDate leaves upcoming dates unchanged", () => {
   assert.equal(correctPastTravelIsoDate("2026-09-12", JUNE_2026), "2026-09-12");
   assert.equal(correctPastTravelIsoDate("2027-01-15", JUNE_2026), "2027-01-15");
+});
+
+test("correctPastTravelIsoDate does not bump same-year past stays after trip dates pass", () => {
+  assert.equal(correctPastTravelIsoDate("2026-09-05", LATE_SEP_2026), "2026-09-05");
+  assert.equal(correctPastTravelIsoDate("2025-09-05", LATE_SEP_2026), "2026-09-05");
 });
 
 test("correctPastTravelLocalTime preserves time suffix", () => {

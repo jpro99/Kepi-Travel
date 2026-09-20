@@ -1,4 +1,3 @@
-const GRACE_DAYS = 14;
 const MAX_YEAR_BUMPS = 2;
 
 function parseIsoDateParts(isoDate: string): { year: number; month: number; day: number } | null {
@@ -16,23 +15,26 @@ function formatIsoDate(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-/** Roll a YYYY-MM-DD forward when it is clearly in the past (e.g. 2025 dates imported in 2026). */
+/**
+ * Roll a YYYY-MM-DD forward when the calendar year is behind the reference year
+ * (e.g. 2025 dates imported in 2026). Dates already in the reference year are kept
+ * even when the stay is in the past — booked facts, not parsing typos.
+ */
 export function correctPastTravelIsoDate(isoDate: string, referenceDate = new Date()): string {
   const parts = parseIsoDateParts(isoDate);
   if (!parts) return isoDate;
 
-  const graceThreshold = referenceDate.getTime() - GRACE_DAYS * 86_400_000;
-  let year = parts.year;
+  const refYear = referenceDate.getFullYear();
+  if (parts.year >= refYear) {
+    return formatIsoDate(parts.year, parts.month, parts.day);
+  }
 
-  for (let bump = 0; bump <= MAX_YEAR_BUMPS; bump += 1) {
-    const candidate = new Date(year, parts.month - 1, parts.day, 12, 0, 0);
-    if (candidate.getTime() >= graceThreshold) {
-      return formatIsoDate(year, parts.month, parts.day);
-    }
+  let year = parts.year;
+  for (let bump = 0; bump <= MAX_YEAR_BUMPS && year < refYear; bump += 1) {
     year += 1;
   }
 
-  return isoDate.trim().slice(0, 10);
+  return formatIsoDate(year, parts.month, parts.day);
 }
 
 /** Correct YYYY-MM-DD HH:mm (and optional seconds) schedules. */
