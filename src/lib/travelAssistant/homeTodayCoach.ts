@@ -20,6 +20,8 @@ export interface HomeStayReservation {
   localTime?: string;
   checkOutDate?: string;
   notes?: string;
+  /** ÖBB/Trenitalia ticket body — used for arrival-time parsing when localTime is departure-only. */
+  originalEmailText?: string;
   timezone?: string;
   trainNumber?: string;
   plannedOnly?: boolean;
