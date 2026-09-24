@@ -91,7 +91,10 @@ function isBookedHotel(reservation: HomeStayReservation): boolean {
 }
 
 function isBookedTrain(reservation: HomeStayReservation): boolean {
-  return isBookedTrainReservation(reservation);
+  return isBookedTrainReservation({
+    ...reservation,
+    confirmationCode: reservation.confirmationCode ?? undefined,
+  });
 }
 
 function parseLocalDateTimeMs(localTime: string | undefined): number | null {

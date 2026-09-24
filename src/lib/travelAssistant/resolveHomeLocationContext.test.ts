@@ -107,7 +107,8 @@ test("G67: stop range wins when no hotel covers today", () => {
       {
         checkIn: "2026-09-15",
         checkOut: "2026-09-17",
-        stop: { name: "Venice", id: "venice" },
+        nights: 2,
+        stop: { name: "Venice" },
       },
     ],
     tripStartDate: "2026-09-01",
