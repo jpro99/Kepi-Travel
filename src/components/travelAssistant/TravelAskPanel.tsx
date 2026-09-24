@@ -34,8 +34,8 @@ function examplePrompts(destination: string | null | undefined): string[] {
   const place = destination?.trim() || "here";
   return [
     `Best walking tour in ${place}?`,
-    `Restaurant with air conditioning near centro storico`,
-    `What should we do this afternoon?`,
+    `Restaurant with air conditioning near the center of ${place}?`,
+    `What should we do this afternoon in ${place}?`,
   ];
 }
 
@@ -52,8 +52,8 @@ export function TravelAskPanel({
   );
 
   const welcomeMessage = destination?.trim()
-    ? `You're traveling in ${destination.trim()}. Ask me about walking tours, restaurants, neighborhoods, or anything on this trip.`
-    : "Ask me about walking tours, restaurants, neighborhoods, or anything on your trip.";
+    ? `You're near ${destination.trim()} today. Ask me about walking tours, restaurants, neighborhoods, or anything on this trip.`
+    : "Ask me about walking tours, restaurants, neighborhoods, or anything on your trip — I'll use your booked itinerary when I know where you are.";
 
   const { messages, inputValue, setInputValue, isSending, error, sendMessage, scrollRef } =
     useTravelAskChat({ tripContext, welcomeMessage });

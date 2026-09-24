@@ -3,7 +3,11 @@
 **Purpose:** Durable facts for humans and AI agents working on this repo.  
 **Update rule:** When the user states something that should not be forgotten (decisions, completed external steps, preferences), append or edit this file in the same session.
 
-Last updated: 2026-09-20 (I61 train + CI date-correction fix)
+Last updated: 2026-09-24 (G67 Ask Kepi local city fix)
+
+## Decision 2026-09-24 — G67: Ask Kepi “Near …” must follow today, not Lecce (Jeff)
+
+Home showed **Near Lecce** + Lecce walking-tour prompts while Jeff was on Bolzano→Munich. Root cause: Ask Kepi used `derivedTripDestination` = **first booked hotel in storage order** (early Italy leg), not calendar-today stay or today’s train. **Fix:** shared `resolveHomeLocationContext` — today’s hotel (G50), today’s train dep/arr city, stop range, day plan, then trip destination; wired to TravelAskPanel, mobile/desktop Home, Kepi Help context, weather/local intel.
 
 ## Incident 2026-09-20 — Vercel/CI failures: date-sensitive tests after Europe trip dates passed (Jeff)
 

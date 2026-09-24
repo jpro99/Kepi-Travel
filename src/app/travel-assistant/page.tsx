@@ -328,6 +328,7 @@ import {
 } from "@/lib/travelAssistant/calendarSyncClient";
 import { buildMissionControlSnapshot } from "@/lib/travelAssistant/tripPhase";
 import { travelerTodayKey } from "@/lib/travelAssistant/homeTodayCoach";
+import { resolveHomeLocationContext } from "@/lib/travelAssistant/resolveHomeLocationContext";
 import {
   buildTripReadinessSummary,
   detectScheduleCollisions,
@@ -4958,6 +4959,38 @@ export default function TravelAssistantPage() {
     ],
   );
 
+  /** G67 — today's city for Ask Kepi / local help (not first hotel in storage order). */
+  const homeLocationContext = useMemo(
+    () =>
+      resolveHomeLocationContext({
+        reservations: consumerReservationsSorted,
+        stopRanges: effectiveStopRanges,
+        tripStartDate: consumerTripStartDate ?? activeTrip?.startDate,
+        tripEndDate: consumerTripEndDate ?? activeTrip?.endDate,
+        dayNotes: itineraryPrefs.dayNotes,
+        tripDestination: consumerTripDestination ?? activeTrip?.destination ?? null,
+        timezone: travelerTimezoneForHome,
+        locationStatus: guidanceLocationStatus,
+        nearestAirportIata: guidanceNearestAirport,
+      }),
+    [
+      activeTrip?.destination,
+      activeTrip?.endDate,
+      activeTrip?.startDate,
+      consumerReservationsSorted,
+      consumerTripDestination,
+      consumerTripEndDate,
+      consumerTripStartDate,
+      effectiveStopRanges,
+      guidanceLocationStatus,
+      guidanceNearestAirport,
+      itineraryPrefs.dayNotes,
+      travelerTimezoneForHome,
+    ],
+  );
+
+  const localHelpCity = homeLocationContext.displayCity;
+
   const plannedStayCities = useMemo(
     () =>
       buildPlannedStayCities(
@@ -5461,7 +5494,7 @@ export default function TravelAssistantPage() {
     setSupportLiveContext({
       tripId: activeTripId,
       tripName: activeTrip?.name ?? null,
-      destination: consumerTripDestination ?? activeTrip?.destination ?? null,
+      destination: localHelpCity ?? consumerTripDestination ?? activeTrip?.destination ?? null,
       journeyPhase: journeyPhase.kind,
       locationStatus: guidanceLocationStatus,
       physicalAirportIata: helpLiveAirportIata,
@@ -5501,6 +5534,7 @@ export default function TravelAssistantPage() {
     guidanceLocationStatus,
     helpLiveAirportIata,
     journeyPhase.kind,
+    localHelpCity,
     travelerCaptureFactsLine,
     travelerTimezoneForHome,
   ]);
@@ -10658,7 +10692,7 @@ export default function TravelAssistantPage() {
                 onNavigateTab={navigateMobilePrimaryTab}
                 journeyPhase={mobileJourneyPhase}
                 tripName={activeTrip?.name ?? tApp("defaultTripName")}
-                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                destination={localHelpCity ?? consumerTripDestination ?? activeTrip?.destination ?? null}
                 startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
                 endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
                 hasActiveTrip={Boolean(activeTrip)}
@@ -10856,7 +10890,7 @@ export default function TravelAssistantPage() {
             ) : (
               <DesktopTripHomeView
                 tripName={activeTrip?.name ?? tApp("defaultTripName")}
-                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                destination={localHelpCity ?? consumerTripDestination ?? activeTrip?.destination ?? null}
                 startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
                 endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
                 journeyPhase={journeyPhase}
@@ -11086,7 +11120,7 @@ export default function TravelAssistantPage() {
           ) : (
             <section className="space-y-3">
               <TravelAskPanel
-                destination={consumerTripDestination ?? activeTrip?.destination ?? null}
+                destination={localHelpCity ?? consumerTripDestination ?? activeTrip?.destination ?? null}
                 tripName={activeTrip?.name ?? null}
                 startDate={consumerTripStartDate ?? activeTrip?.startDate ?? null}
                 endDate={consumerTripEndDate ?? activeTrip?.endDate ?? null}
@@ -11738,10 +11772,10 @@ export default function TravelAssistantPage() {
         />
         {shouldRenderMobilePanel("essentials") ? (
           <section className="grid gap-4 sm:gap-6 xl:grid-cols-2">
-            <WeatherCard destination={activeTrip?.destination ?? "Set destination"} />
+            <WeatherCard destination={localHelpCity ?? activeTrip?.destination ?? "Set destination"} />
             {tripStage === "readiness" ? (
               <LocalIntelligencePanel
-                destination={activeTrip?.destination ?? "Set destination"}
+                destination={localHelpCity ?? activeTrip?.destination ?? "Set destination"}
                 startDate={activeTrip?.startDate}
                 endDate={activeTrip?.endDate}
               />
